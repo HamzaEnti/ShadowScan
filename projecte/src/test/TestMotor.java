@@ -1,3 +1,4 @@
+/*
 package controller;
 import java.net.InetAddress; // Per obtenir la IP local
 
@@ -36,3 +37,4 @@ public class TestMotor {
         }
     }
 }
+*/
