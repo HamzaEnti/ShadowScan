@@ -1,5 +1,7 @@
-package controller;
+package test;
 import java.net.InetAddress; // Per obtenir la IP local
+
+import controller.ScanController;
 
 public class TestMotor {
 
