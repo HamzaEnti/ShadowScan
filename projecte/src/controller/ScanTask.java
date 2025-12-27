@@ -2,15 +2,22 @@ package controller;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.swing.SwingUtilities;
+
 import model.ResultatHost;
-import utils.NetworkUtil; 
+import utils.NetworkUtil;
+import view.MainFrame; 
 
 public class ScanTask implements Runnable {
 
     private String ip;
+    private MainFrame vista; // variable per guardar la finestra
 
-    public ScanTask(String ip) {
+
+    public ScanTask(String ip, MainFrame vista) {
         this.ip = ip;
+        this.vista = vista;
     }
 
     @Override
@@ -39,6 +46,13 @@ public class ScanTask implements Runnable {
             
             // els guardo
             host.setPortsOberts(portsTrobats);
+
+
+            // ZONA VISUAL: avisem a la pantalla que hem trobat algo
+            // es fa amb invokeLater perque swing no peti amb els fils
+            SwingUtilities.invokeLater(() -> {
+                vista.afegirResultat(host);
+            });
 
             System.out.println("host trobat: " + host.toString());
         }

@@ -2,13 +2,18 @@ package controller;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import view.MainFrame; // importo la vista nova
+
 
 public class ScanController {
 
     private ExecutorService pool;
-    private boolean enExecucio; 
+    private boolean enExecucio;
+    private MainFrame vista; // guardo la referencia a la finestra
+ 
 
-    public ScanController() {
+    public ScanController(MainFrame v) {
+        this.vista = v;
         this.enExecucio = false;
     }
 
@@ -32,7 +37,7 @@ public class ScanController {
             String ipObjectiu = xarxa + i;
             
             // li passo la ip a la tasca i la poso a la cua
-            ScanTask tasca = new ScanTask(ipObjectiu);
+            ScanTask tasca = new ScanTask(ipObjectiu, vista);
             pool.execute(tasca);
         }
 
