@@ -1,44 +1,52 @@
 package services;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.Socket;
-import java.util.Random;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
 
 public class FuzzingService {
 
-    // Metode per llancar l'atac de fuzzing durant un temps determinat
-    public void lanzarFuzzing(String ip, int port, int segons) {
-        // Calculem el moment en el futur en que ha d'acabar l'atac (temps actual + segons * 1000 ms)
-        long tempsFinal = System.currentTimeMillis() + (segons * 1000);
+    public void lanzarFuzzing(String ip, int port, String rutaWordlist) {
         
-        // Objecte per generar dades aleatories
-        Random random = new Random();
+        if (!new File(rutaWordlist).exists()) {
+            System.out.println("Error: La wordlist de fuzzing no existeix: " + rutaWordlist);
+            return;
+        }
+
+        System.out.println("Arrancant FFUF Professional...");
+        String url = "http://" + ip + ":" + port + "/FUZZ";
         
-        // Buffer de bytes per enviar dades brossa
-        byte[] dadesAleatories = new byte[1024];
+        System.out.println("Target: " + url);
+        System.out.println("Wordlist: " + rutaWordlist);
 
-        // Intentem obrir un socket contra la IP i el port objectiu
-        try (Socket socket = new Socket(ip, port)) {
-            // Obtenim el canal de sortida per enviar dades al servidor
-            OutputStream out = socket.getOutputStream();
+        try {
+            // Comanda escalable: ffuf llegeix directament del disc dur
+            // -c (color), -mc (match codes), -s (silent mode)
+            ProcessBuilder pb = new ProcessBuilder(
+                "ffuf",
+                "-w", rutaWordlist,
+                "-u", url,
+                "-mc", "200,301,302,403",
+                "-c",
+                "-s" 
+            );
 
-            // Bucle que s'executara mentre no hagi passat el temps indicat
-            while (System.currentTimeMillis() < tempsFinal) {
-                // Omplim el buffer amb bytes aleatoris
-                random.nextBytes(dadesAleatories);
-                
-                // Enviem els bytes pel socket
-                out.write(dadesAleatories);
-                
-                // Forcem l'enviament de les dades immediatament
-                out.flush();
+            Process p = pb.start();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String linia;
+            
+            System.out.println("Escanejant directoris...");
+            
+            while ((linia = reader.readLine()) != null) {
+                // FFUF en mode silent nomes imprimeix els resultats bons
+                System.out.println(" Ruta descoberta: /" + linia);
             }
+            
+            p.waitFor();
+            System.out.println("Fuzzing completat.");
 
-        } catch (IOException e) {
-            // Capturem l'excepcio si el servidor tanca la connexio o hi ha un error de xarxa
-            // Aixo es habitual en fuzzing si el servidor peta
-            System.out.println("Excepció de connexió: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("Error executant ffuf: " + e.getMessage());
         }
     }
 }
