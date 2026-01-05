@@ -26,14 +26,12 @@ public class ScanTask implements Runnable {
             ResultatHost host = new ResultatHost(ip);
             host.setEsViu(true);
             
-            // Aqui podrem afegir molts ports a provar
-            // 21:ftp, 22:ssh, 23:telnet, 80:web, 443:https
-            // 3306:mysql, 5432:postgres, 3389:escriptori remot windows, 8080:tomcat/web
-            int[] llistaPorts = {21, 22, 23, 80, 443, 3306, 3389, 5432, 8080};
+            // Bucle de 1 a 65535 per afegir tots els ports possibles i saber si estan oberts o no
             List<Integer> portsTrobats = new ArrayList<>();
 
-            for (int port : llistaPorts) {
-                if (NetworkUtil.isPortOpen(ip, port, 200)) {
+            for (int port = 1; port <= 65535; port++) {
+                // He posat 20ms de timeout perque vagi rapid amb tants ports
+                if (NetworkUtil.isPortOpen(ip, port, 20)) {
                     portsTrobats.add(port);
                 }
             }
