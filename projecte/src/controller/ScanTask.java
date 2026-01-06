@@ -1,50 +1,70 @@
 package controller;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import javax.swing.SwingUtilities; // necessari per tocar la interficie
-
 import model.ResultatHost;
 import utils.NetworkUtil;
 import view.MainFrame; // la vista de l'oscar
 
 public class ScanTask implements Runnable {
+  private String ip; // variable per guardar la finestra
+  private MainFrame vista;
+  private PortScanMode mode;
 
-    private String ip;
-    private MainFrame vista; // variable per guardar la finestra
+  // constructor actualitzat per nico
+  public ScanTask(String ip, MainFrame v, PortScanMode mode) {
+    this.ip = ip;
+    this.vista = v;
+    this.mode = mode;
+  }
+  //ports utilitzats per a l'escaneig parcial
+  private static final int[] COMMON_PORTS = {
+      21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 3306, 3389, 8080};
 
-    // constructor actualitzat
-    public ScanTask(String ip, MainFrame v) {
-        this.ip = ip;
-        this.vista = v;
+  @Override
+  public void run() {
+    if (!NetworkUtil.isReachable(ip, 200))
+      return;
+
+    ResultatHost host = new ResultatHost(ip);
+    host.setEsViu(true);
+
+    List<Integer> portsOberts = Collections.synchronizedList(new ArrayList<>());
+
+    ExecutorService portPool = Executors.newFixedThreadPool(50); // ajustable
+
+    if (mode == PortScanMode.PARCIAL) {
+      for (int port : COMMON_PORTS) { //parcial
+        portPool.execute(() -> {
+          if (NetworkUtil.isPortOpen(ip, port, 50)) {
+            portsOberts.add(port);
+          }
+        });
+      }
+    } else { // full
+      for (int port = 1; port <= 65535; port++) {
+        final int p = port;
+        portPool.execute(() -> {
+          if (NetworkUtil.isPortOpen(ip, p, 20)) {
+            portsOberts.add(p);
+          }
+        });
+      }
     }
 
-    @Override
-    public void run() {
-        if (NetworkUtil.isReachable(ip, 200)) {
-            
-            ResultatHost host = new ResultatHost(ip);
-            host.setEsViu(true);
-            
-            // Bucle de 1 a 65535 per afegir tots els ports possibles i saber si estan oberts o no
-            List<Integer> portsTrobats = new ArrayList<>();
-
-            for (int port = 1; port <= 65535; port++) {
-                // He posat 20ms de timeout perque vagi rapid amb tants ports
-                if (NetworkUtil.isPortOpen(ip, port, 20)) {
-                    portsTrobats.add(port);
-                }
-            }
-            
-            host.setPortsOberts(portsTrobats);
-
-            // ZONA VISUAL: avisem a la pantalla que hem trobat algo
-            // es fa amb invokeLater perque swing no peti amb els fils
-            SwingUtilities.invokeLater(() -> {
-                vista.afegirResultat(host);
-            });
-            
-            System.out.println("trobat: " + ip);
-        }
+    portPool.shutdown();
+    try {
+      portPool.awaitTermination(10, TimeUnit.MINUTES);
+    } catch (InterruptedException ignored) {
     }
+
+    host.setPortsOberts(portsOberts);
+
+    SwingUtilities.invokeLater(() -> vista.afegirResultat(host));
+  }
 }

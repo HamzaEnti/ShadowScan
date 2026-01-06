@@ -1,5 +1,6 @@
 package controller;
 
+
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import view.MainFrame; // importo la vista nova
@@ -16,32 +17,21 @@ public class ScanController {
         this.enExecucio = false;
     }
 
-    public void escanearRang(String xarxa) {
-        System.out.println("iniciant escaneig a: " + xarxa);
-        
-        if (pool != null && !pool.isTerminated()) {
-            pool.shutdownNow();
-        }
+    public void escanearRang(String xarxa, PortScanMode mode) {
+    pool = Executors.newFixedThreadPool(20);
+    enExecucio = true;
 
-        pool = Executors.newFixedThreadPool(20);
-        enExecucio = true;
-
-        for (int i = 1; i <= 254; i++) {
-            if (!enExecucio) break; 
-
-            String ipObjectiu = xarxa + i;
-            
-            // AQUI EL CANVI IMPORTANT:
-            // passo la vista a la tasca perque pugui pintar la taula
-            ScanTask tasca = new ScanTask(ipObjectiu, vista);
-            pool.execute(tasca);
-        }
-
-        pool.shutdown();
+    for (int i = 1; i <= 254; i++) {
+        if (!enExecucio) break;
+        String ip = xarxa + i;
+        pool.execute(new ScanTask(ip, vista, mode));
     }
 
+    pool.shutdown();
+}
+
     public void aturar() {
-        System.out.println("aturant...");
+        System.out.println("Aturant escaneig.");
         enExecucio = false;
         if (pool != null) {
             pool.shutdownNow();

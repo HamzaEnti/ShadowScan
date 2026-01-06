@@ -1,104 +1,120 @@
 package services;
 
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class WebDiscoveryService {
+  private List<String> foundUrls;
+  private String customDictionaryPath;
 
-    private List<String> wordlist;
-    private List<String> foundUrls;
+  public WebDiscoveryService() {
+    this.foundUrls = new ArrayList<>();
+    this.customDictionaryPath = null;
+  }
 
-    public WebDiscoveryService() {
-        // Carreguem un diccionari basic per defecte
-        this.wordlist = new ArrayList<>(Arrays.asList(
-            "admin", "login", "test", "backup", "dashboard", 
-            "config", "uploads", "images", "api", "wp-admin", "shell", "private"
-        ));
-        this.foundUrls = new ArrayList<>();
+  // Comprova si dirb esta instalat
+  public boolean checkToolInstalled() {
+    try {
+      ProcessBuilder pb = new ProcessBuilder("dirb", "-h");
+      Process p = pb.start();
+      int exitCode = p.waitFor();
+      return exitCode == 0;
+    } catch (Exception e) {
+      return false;
     }
+  }
 
-    // Comprova si el servidor respon abans de començar l'atac massiu
-    public boolean checkConnection(String baseUrl) {
-        try {
-            URL url = new URL(baseUrl);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setConnectTimeout(3000);
-            connection.connect();
-            return true;
-        } catch (Exception e) {
-            return false;
+  // Defineix el diccionari personalitzat
+  public void setCustomDictionary(File dictionaryFile) {
+    if (dictionaryFile != null && dictionaryFile.exists()) {
+      this.customDictionaryPath = dictionaryFile.getAbsolutePath();
+      System.out.println("Diccionari carregat: " + this.customDictionaryPath);
+    } else {
+      System.out.println("Error: El fitxer de diccionari no existeix.");
+    }
+  }
+
+  // Executa l'atac
+  public void discoverWebPaths(String baseUrl) {
+    System.out.println("Iniciant escaneig extern amb DIRB sobre: " + baseUrl);
+    this.foundUrls.clear();
+
+    try {
+      List<String> command = new ArrayList<>();
+      command.add("dirb");
+      command.add(baseUrl);
+
+      if (customDictionaryPath != null) {
+        command.add(customDictionaryPath);
+      } else {
+        System.out.println("Utilitzant diccionari per defecte.");
+      }
+
+      command.add("-r"); // No recursiu
+      command.add("-S"); // Silent
+      command.add("-N");
+      command.add("404");
+
+      ProcessBuilder pb = new ProcessBuilder(command);
+      pb.redirectErrorStream(true);
+
+      Process process = pb.start();
+      BufferedReader reader =
+          new BufferedReader(new InputStreamReader(process.getInputStream()));
+      String line;
+
+      while ((line = reader.readLine()) != null) {
+        if (line.contains("CODE:200") || line.contains("DIRECTORY")
+            || line.contains("+")) {
+          System.out.println("DIRB " + line);
+
+          // Netejem una mica la línia abans de guardar-la
+          // Exemple entrada: "+ http://web.com/admin (CODE:200)"
+          foundUrls.add(line);
         }
+      }
+
+      int exitCode = process.waitFor();
+      System.out.println("Procés extern finalitzat amb codi: " + exitCode);
+
+    } catch (Exception e) {
+      System.err.println("Error executant dirb: " + e.getMessage());
+    }
+  }
+
+  public boolean exportReportToCSV(File file) {
+    if (foundUrls.isEmpty()) {
+      System.out.println("No hi ha dades per exportar.");
+      return false;
     }
 
-    public void discoverWebPaths(String baseUrl) {
-        System.out.println("Iniciant modul de reconeixement web...");
+    try (FileWriter writer = new FileWriter(file)) {
+      // Escriure capçalera
+      writer.write("RESULTAT_BRUT,DATA_ESCANEIG\n");
 
-        // Normalitzacio de la URL
-        if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
-            baseUrl = "http://" + baseUrl;
-        }
-        if (baseUrl.endsWith("/")) {
-            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
-        }
+      // Escriure cada linia trobada
+      for (String result : foundUrls) {
+        // Afegim cometes per si el text te comes i evitem trencar el CSV
+        writer.write(
+            "\"" + result + "\",\"" + java.time.LocalDate.now() + "\"\n");
+      }
 
-        // Comprovacio de seguretat: El servidor es accessible?
-        System.out.println("Verificant connectivitat amb " + baseUrl + "...");
-        if (!checkConnection(baseUrl)) {
-            System.err.println("ERROR: No s'ha pogut establir connexio amb l'objectiu.");
-            System.err.println("Verifica que la URL es correcta o que el servidor esta actiu.");
-            return; // Aturem l'execucio aqui
-        }
+      System.out.println(
+          "Informe exportat correctament: " + file.getAbsolutePath());
+      return true;
 
-        System.out.println("Objectiu actiu. Carregant diccionari (" + wordlist.size() + " entrades)...");
-        this.foundUrls.clear();
-
-        // Bucle de descobriment
-        for (String word : wordlist) {
-            String targetUrl = baseUrl + "/" + word;
-            
-            try {
-                URL url = new URL(targetUrl);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                
-                // Usem GET amb timeout curt per agilitzar
-                conn.setRequestMethod("GET");
-                conn.setConnectTimeout(2000);
-                conn.setReadTimeout(2000);
-                conn.connect();
-                
-                int status = conn.getResponseCode();
-
-                // Filtrem el 404 (Not Found). Qualsevol altra cosa ens interessa.
-                if (status != 404) {
-                    String logEntry = " > [DIR] Descobert: /" + word + " (Codi: " + status + ")";
-                    System.out.println(logEntry);
-                    foundUrls.add(targetUrl + ";" + status);
-                }
-
-                conn.disconnect();
-
-            } catch (Exception e) {
-                // Silenciem errors de connexió puntuals per no embrutar la consola
-            }
-        }
-        
-        System.out.println("Escaneig finalitzat. Resultats totals: " + foundUrls.size());
+    } catch (IOException e) {
+      System.err.println("Error: Escrivint el fitxer CSV: " + e.getMessage());
+      return false;
     }
+  }
 
-    // Metodes d'acces per a gestio de dades externa
-    public List<String> getWordlist() {
-        return wordlist;
-    }
-
-    public void setWordlist(List<String> wordlist) {
-        this.wordlist = wordlist;
-    }
-
-    public List<String> getFoundUrls() {
-        return foundUrls;
-    }
+  public List<String> getFoundUrls() {
+    return foundUrls;
+  }
 }
