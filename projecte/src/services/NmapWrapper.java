@@ -8,75 +8,95 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
-public class NmapWrapper {
-    private List<String> foundUrls;
+
+public class NmapWrapper extends AbstractScanService {
+
+    // llista on guardem les linies de sortida per poder exportar
+    private List<String> resultats;
+
     public NmapWrapper() {
-        // Llista buida per guardar resultats
-        this.foundUrls = new ArrayList<>();
+        super("NMAP");
+        this.resultats = new ArrayList<>();
     }
 
-    // Comprova si nmap està instal·lat
-    public boolean checkNmapInstalled() {
+    @Override
+    public boolean checkInstalled() {
         try {
             ProcessBuilder pb = new ProcessBuilder("nmap", "--version");
             Process p = pb.start();
             int exitCode = p.waitFor();
             return (exitCode == 0);
         } catch (Exception e) {
-            // Si falla, no està instal·lat
             return false;
         }
     }
 
-    // Escaneig principal amb nmap
+    @Override
+    public void executar(String ip, int port) {
+        escanearConNmap(ip);
+    }
+    
     public void escanearConNmap(String ip) {
-        System.out.println(">>> [NMAP SERVICE] Llançant comanda contra: " + ip);
+        log("Llancant comanda contra: " + ip);
+        resultats.clear(); // netegem resultats anteriors
 
         try {
-            // Comanda bàsica amb detecció de versions (-sV) i velocitat (-T4)
             ProcessBuilder pb = new ProcessBuilder("nmap", "-sV", "-T4", ip);
-
-            pb.redirectErrorStream(true); // Junta stdout i stderr
+            pb.redirectErrorStream(true);
 
             Process process = pb.start();
 
-            // Llegeix la sortida en temps real
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream())
+            );
             String line;
 
             while ((line = reader.readLine()) != null) {
-                // Mostra cada línia al log
                 System.out.println(line);
+                resultats.add(line); // guardem cada linia
             }
 
             int exitCode = process.waitFor();
 
             if (exitCode == 0) {
-                System.out.println(">>> [NMAP] Escaneig finalitzat amb èxit.");
+                log("Escaneig finalitzat amb exit.");
             } else {
-                System.err.println(">>> [NMAP] Ha acabat amb errors (Codi: " + exitCode + ")");
+                logError("Ha acabat amb errors (Codi: " + exitCode + ")");
             }
 
         } catch (Exception e) {
-            // Error general
-            System.err.println(">>> [ERROR] Fallada executant Nmap: " + e.getMessage());
+            logError("Fallada executant Nmap: " + e.getMessage());
             e.printStackTrace();
         }
     }
-    // Exporta resultats a CSV
-    public boolean exportReportToCSV(File file) {
-        if (foundUrls.isEmpty()) {
-            System.out.println("No hi ha resultats per exportar.");
+    
+    // retorna els resultats guardats
+    public List<String> getResultats() {
+        return new ArrayList<>(resultats);
+    }
+    
+    // exporta resultats a CSV
+    public boolean exportToCSV(File file) {
+        if (resultats.isEmpty()) {
+            log("No hi ha resultats per exportar.");
             return false;
         }
+        
         try (FileWriter writer = new FileWriter(file)) {
-            writer.write("URL,DATA\n");
-            for (String s : foundUrls) {
-                writer.write("\"" + s + "\",\"" + new java.util.Date() + "\"\n");
+            writer.write("LINIA,CONTINGUT,DATA\n");
+            
+            int numLinia = 1;
+            for (String s : resultats) {
+                String escaped = s.replace("\"", "\"\"");
+                writer.write(numLinia + ",\"" + escaped + "\",\"" + new java.util.Date() + "\"\n");
+                numLinia++;
             }
-            System.out.println("CSV Exportat: " + file.getAbsolutePath());
+            
+            log("CSV Exportat: " + file.getAbsolutePath());
             return true;
+            
         } catch (IOException e) {
+            logError("Error exportant CSV: " + e.getMessage());
             return false;
         }
     }

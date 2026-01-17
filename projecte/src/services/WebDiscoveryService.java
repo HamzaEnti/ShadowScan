@@ -8,102 +8,136 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
-public class WebDiscoveryService {
+
+public class WebDiscoveryService extends AbstractScanService {
+    
     private List<String> foundUrls;
     private String customDictionaryPath;
 
     public WebDiscoveryService() {
-        // Llista buida per guardar resultats
+        super("DIRB");
         this.foundUrls = new ArrayList<>();
         this.customDictionaryPath = null;
     }
 
-    // Comprova si dirb està instal·lat
+    // comprova si dirb esta instalat
+    @Override
     public boolean checkInstalled() {
         try {
             ProcessBuilder pb = new ProcessBuilder("dirb", "-h");
             pb.start();
             return true;
         } catch (Exception e) {
-            // Si falla, no està instal·lat
             return false;
         }
     }
+    
+    // implementacio de la interficie
+    // construim la URL i cridem al metode principal
+    @Override
+    public void executar(String target, int port) {
+        String url = "http://" + target + ":" + port + "/";
+        discoverWebPaths(url);
+    }
 
-    // Carrega diccionari personalitzat
+    // carrega un diccionari personalitzat
     public void loadCustomDictionary(File dictionaryFile) {
         if (dictionaryFile != null && dictionaryFile.exists()) {
             this.customDictionaryPath = dictionaryFile.getAbsolutePath();
-            System.out.println(">>> [DIRB] Diccionari seleccionat: " + dictionaryFile.getName());
+            log("Diccionari seleccionat: " + dictionaryFile.getName());
         }
     }
 
-    // Sobrecàrrega per passar IP i port
+    // sobrecarrega per passar IP i port directament
     public void discoverWebPaths(String targetIp, int port, String wordlistPath) {
-        if (wordlistPath != null) this.customDictionaryPath = wordlistPath;
+        if (wordlistPath != null) {
+            this.customDictionaryPath = wordlistPath;
+        }
         String url = "http://" + targetIp + ":" + port + "/";
         discoverWebPaths(url);
     }
 
-    // Escaneig principal
+    // metode principal d'escaneig
     public void discoverWebPaths(String baseUrl) {
-        System.out.println(">>> [DIRB] Iniciant escaneig a: " + baseUrl);
+        log("Iniciant escaneig a: " + baseUrl);
         this.foundUrls.clear();
 
         try {
+            // construim la comanda
             List<String> command = new ArrayList<>();
             command.add("dirb");
             command.add(baseUrl);
 
+            // si tenim diccionari custom, l'afegim
             if (customDictionaryPath != null) {
                 command.add(customDictionaryPath);
             }
 
-            command.add("-r"); // No recursiu
-            command.add("-S"); // Silent
-            command.add("-N"); // Sense colors
-            command.add("404"); // Ignora 404
+            // opcions de dirb:
+            // -r = no recursiu (mes rapid)
+            // -S = mode silencis (menys soroll)
+            // -N 404 = ignora respostes 404
+            command.add("-r");
+            command.add("-S");
+            command.add("-N");
+            command.add("404");
 
             ProcessBuilder pb = new ProcessBuilder(command);
-            pb.redirectErrorStream(true); // Junta stdout i stderr
+            pb.redirectErrorStream(true);
 
             Process process = pb.start();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream())
+            );
             String line;
 
             while ((line = reader.readLine()) != null) {
-                // Mostra cada línia
                 System.out.println("[DIRB] " + line);
 
-                // Guarda només els èxits
-                if (line.contains("CODE:200") || line.contains("DIRECTORY") || line.contains("+")) {
+                // guardem nomes els exits (codi 200, directoris, etc)
+                if (line.contains("CODE:200") || 
+                    line.contains("DIRECTORY") || 
+                    line.contains("+")) {
                     foundUrls.add(line);
                 }
             }
 
             int exitCode = process.waitFor();
-            System.out.println(">>> [DIRB] Finalitzat (Codi: " + exitCode + ")");
+            log("Finalitzat (Codi: " + exitCode + ")");
 
         } catch (Exception e) {
-            // Error general
-            System.err.println(">>> [ERROR] Dirb fallit: " + e.getMessage());
+            logError("Dirb fallit: " + e.getMessage());
         }
     }
+    
+    // retorna la llista de URLs trobades
+    public List<String> getFoundUrls() {
+        return new ArrayList<>(foundUrls); // retornem copia per seguretat
+    }
 
-    // Exporta resultats a CSV
+    // exporta resultats a CSV
     public boolean exportReportToCSV(File file) {
         if (foundUrls.isEmpty()) {
-            System.out.println("No hi ha resultats per exportar.");
+            log("No hi ha resultats per exportar.");
             return false;
         }
+        
         try (FileWriter writer = new FileWriter(file)) {
+            // capcalera del CSV
             writer.write("URL,DATA\n");
+            
+            // cada resultat en una linia
             for (String s : foundUrls) {
-                writer.write("\"" + s + "\",\"" + new java.util.Date() + "\"\n");
+                // escapem les cometes per si de cas
+                String escaped = s.replace("\"", "\"\"");
+                writer.write("\"" + escaped + "\",\"" + new java.util.Date() + "\"\n");
             }
-            System.out.println("CSV Exportat: " + file.getAbsolutePath());
+            
+            log("CSV Exportat: " + file.getAbsolutePath());
             return true;
+            
         } catch (IOException e) {
+            logError("Error exportant CSV: " + e.getMessage());
             return false;
         }
     }

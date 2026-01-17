@@ -12,88 +12,80 @@ import utils.NetworkUtil;
 import view.MainFrame;
 
 public class ScanTask implements Runnable {
-  private String ip;
-  private MainFrame vista;
-  private PortScanMode mode;
-
-  public ScanTask(String ip, MainFrame v, PortScanMode mode) {
-    this.ip = ip;
-    this.vista = v;
-    this.mode = mode;
-  }
-
-  private static final int[] COMMON_PORTS = {
-      21, 22, 23, 25, 53, 80, 110, 139, 143, 443, 445, 3306, 3389, 8080};
-
-  @Override
-  public void run() {
-    // primer mirem si el host esta viu
-    if (!NetworkUtil.isReachable(ip, 200))
-      return;
-
-    ResultatHost host = new ResultatHost(ip);
-    host.setEsViu(true);
-
-    // llista sincronitzada per no petar amb els threads
-    List<Integer> portsOberts = Collections.synchronizedList(new ArrayList<>());
-
-    //Aquesta parts dels threads esta feta amb IA, tot i que la idea la vam treure del oriol
-    // ara si que calculem be els threads
-    int numCores = Runtime.getRuntime().availableProcessors();
-    int threads = Math.max(numCores * 2, 8); // minim 8 threads per anar fluid
     
-    System.out.println("Escanejant " + ip + " amb " + threads + " threads"); // per veure que va
-    
-    ExecutorService portPool = Executors.newFixedThreadPool(threads);
+   
+    private String ip;
+    private MainFrame vista;
+    private PortScanMode mode;
+    private static final int PORT_THREADS = 10;
+    private static final int PORT_TIMEOUT = 50;
 
-    if (mode == PortScanMode.PARCIAL) {
-      // mode parcial, nomes ports comuns
-      for (int port : COMMON_PORTS) {
-        final int p = port; // important pel lambda
-        portPool.execute(() -> {
-          if (NetworkUtil.isPortOpen(ip, p, 50)) {
-            portsOberts.add(p);
-            System.out.println("Port obert trobat: " + p); // debug
-          }
-        });
-      }
-    } else {
-      // mode full, tots els ports
-      for (int port = 1; port <= 65535; port++) {
-        final int p = port;
-        portPool.execute(() -> {
-          if (NetworkUtil.isPortOpen(ip, p, 20)) {
-            portsOberts.add(p);
-            System.out.println("Port obert trobat: " + p); // debug
-          }
-        });
-      }
+    public ScanTask(String ip, MainFrame v, PortScanMode mode) {
+        this.ip = ip;
+        this.vista = v;
+        this.mode = mode;
     }
 
-    // tanquem el pool i esperem que acabi tot
-    portPool.shutdown();
-    try {
-      // esperem maxim 10 minuts per si es un scan full llarg
-      boolean finished = portPool.awaitTermination(10, TimeUnit.MINUTES);
-      if (!finished) {
-        System.out.println("WARNING: Timeout en el scan de " + ip);
-        portPool.shutdownNow(); // forcem tancar si triga massa
-      }
-    } catch (InterruptedException e) {
-      System.out.println("Scan interromput per " + ip);
-      portPool.shutdownNow();
-      Thread.currentThread().interrupt();
-      return;
+    @Override
+    public void run() {
+        // primer comprovem si la IP respon 
+        // timeout de 200ms per no tardar massa
+        if (!NetworkUtil.isReachable(ip, 200)) {
+            // si no respon, no perdem temps escanejant ports
+            return;
+        }
+
+        // la IP respon, creem un resultat
+        ResultatHost host = new ResultatHost(ip);
+        host.setEsViu(true);
+
+        // llista thread-safe per guardar els ports que trobem
+        // synchronized perque multiples threads hi escriuran alhora
+        List<Integer> portsOberts = Collections.synchronizedList(new ArrayList<>());
+        
+        // Part feta amb IA
+        ExecutorService portPool = Executors.newFixedThreadPool(PORT_THREADS);
+    
+        if (mode.esParcial()) {
+            // mode parcial: nomes els ports comuns
+            int[] ports = mode.getPorts();
+            for (int port : ports) {
+                portPool.execute(() -> {
+                    if (NetworkUtil.isPortOpen(ip, port, PORT_TIMEOUT)) {
+                        portsOberts.add(port);
+                    }
+                });
+            }
+        } else {
+            // mode full: tots els 65535 ports
+            for (int port = 1; port <= 65535; port++) {
+                final int p = port;
+                portPool.execute(() -> {
+                    if (NetworkUtil.isPortOpen(ip, p, PORT_TIMEOUT / 2)) {
+                        portsOberts.add(p);
+                    }
+                });
+            }
+        }
+        // Fi part feta amb IA
+
+        // esperem que acabin tots els escaneigs de ports
+        portPool.shutdown();
+        try {
+            // donem fins a 10 minuts per escaneig full
+            // per parcial sobra amb menys, pero no fa mal
+            portPool.awaitTermination(10, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            // si ens interrompen, no passa res, retornem el que tenim
+            Thread.currentThread().interrupt();
+        }
+
+        // guardem els ports trobats al resultat
+        host.setPortsOberts(portsOberts);
+
+        // enviem el resultat a la UI
+        // IMPORTANT: hem d'usar invokeLater perque estem en un thread secundari
+        // i Swing no es thread-safe
+        SwingUtilities.invokeLater(() -> vista.afegirResultat(host));
     }
-
-    // ordenem els ports abans de mostrar
-    Collections.sort(portsOberts);
-    
-    System.out.println("Scan completat per " + ip + ". Ports trobats: " + portsOberts.size());
-    
-    host.setPortsOberts(portsOberts);
-
-    // actualitzem la interficie en el thread correcte
-    SwingUtilities.invokeLater(() -> vista.afegirResultat(host));
-  }
 }
