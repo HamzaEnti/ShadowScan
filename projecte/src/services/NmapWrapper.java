@@ -1,65 +1,83 @@
 package services;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 
 public class NmapWrapper {
+    private List<String> foundUrls;
+    public NmapWrapper() {
+        // Llista buida per guardar resultats
+        this.foundUrls = new ArrayList<>();
+    }
 
-    // Metode per comprovar si l'eina Nmap esta disponible al sistema
+    // Comprova si nmap està instal·lat
     public boolean checkNmapInstalled() {
-        // Preparem la comanda "nmap --version" per veure si respon
-        ProcessBuilder pb = new ProcessBuilder("nmap", "--version");
         try {
-            // Iniciem el proces
-            Process process = pb.start();
-            
-            // Esperem a que el proces acabi i guardem el codi de sortida
-            int exitCode = process.waitFor();
-            
-            // Si el codi de sortida es 0, significa que s'ha executat correctament (true)
-            return exitCode == 0;
-        } catch (IOException | InterruptedException e) {
-            // Si hi ha qualsevol error o excepcio, assumim que no esta installat
-            e.printStackTrace();
+            ProcessBuilder pb = new ProcessBuilder("nmap", "--version");
+            Process p = pb.start();
+            int exitCode = p.waitFor();
+            return (exitCode == 0);
+        } catch (Exception e) {
+            // Si falla, no està instal·lat
             return false;
         }
     }
 
-    // Metode per fer un escaneig rapid i de versions a una IP concreta
-    public String escanearConNmap(String ip) {
-        StringBuilder resultat = new StringBuilder();
-        
-        // Configurem el ProcessBuilder amb la comanda: nmap -sV -F [IP]
-        // -sV: deteccio de versions
-        // -F: mode fast (escaneja menys ports)
-        ProcessBuilder pb = new ProcessBuilder("nmap", "-sV", "-F", ip);
-        
+    // Escaneig principal amb nmap
+    public void escanearConNmap(String ip) {
+        System.out.println(">>> [NMAP SERVICE] Llançant comanda contra: " + ip);
+
         try {
-            // Iniciem el proces d'escaneig
+            // Comanda bàsica amb detecció de versions (-sV) i velocitat (-T4)
+            ProcessBuilder pb = new ProcessBuilder("nmap", "-sV", "-T4", ip);
+
+            pb.redirectErrorStream(true); // Junta stdout i stderr
+
             Process process = pb.start();
-            
-            // Creem un reader per llegir el flux d'entrada (la sortida del terminal)
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String linia;
-                
-                // Llegim linia per linia fins que no hi hagi mes text
-                while ((linia = reader.readLine()) != null) {
-                    // Afegim la linia al nostre StringBuilder i un salt de linia
-                    resultat.append(linia).append("\n");
-                }
+
+            // Llegeix la sortida en temps real
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                // Mostra cada línia al log
+                System.out.println(line);
             }
-            
-            // Esperem que el proces nmap acabi del tot
-            process.waitFor();
 
-        } catch (IOException | InterruptedException e) {
-            // Si falla, imprimim l'error i retornem un missatge d'avis
+            int exitCode = process.waitFor();
+
+            if (exitCode == 0) {
+                System.out.println(">>> [NMAP] Escaneig finalitzat amb èxit.");
+            } else {
+                System.err.println(">>> [NMAP] Ha acabat amb errors (Codi: " + exitCode + ")");
+            }
+
+        } catch (Exception e) {
+            // Error general
+            System.err.println(">>> [ERROR] Fallada executant Nmap: " + e.getMessage());
             e.printStackTrace();
-            return "Error al executar Nmap";
         }
-
-        // Retornem tot el text capturat com un unic String
-        return resultat.toString();
+    }
+    // Exporta resultats a CSV
+    public boolean exportReportToCSV(File file) {
+        if (foundUrls.isEmpty()) {
+            System.out.println("No hi ha resultats per exportar.");
+            return false;
+        }
+        try (FileWriter writer = new FileWriter(file)) {
+            writer.write("URL,DATA\n");
+            for (String s : foundUrls) {
+                writer.write("\"" + s + "\",\"" + new java.util.Date() + "\"\n");
+            }
+            System.out.println("CSV Exportat: " + file.getAbsolutePath());
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
     }
 }
