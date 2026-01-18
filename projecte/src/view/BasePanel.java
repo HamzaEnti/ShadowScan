@@ -6,6 +6,7 @@ import javax.swing.*;
 // Classe abstracta base per a tots els panels de l'aplicacio.
 public abstract class BasePanel extends JPanel {
     
+    // He fet aquest metode amb l'ajuda d'IA.
     // colors que farem servir a tota l'aplicacio
     // aixi si volem canviar-los, nomes ho fem aqui
     protected static final Color COLOR_VERD = new Color(144, 238, 144);

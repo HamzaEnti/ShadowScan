@@ -58,6 +58,7 @@ public class DiscoveryPanel extends BasePanel {
         configurarListeners();
     }
     
+    //He fet aquest metode amb l'ajuda d'IA.
     //Crea el panel superior amb la configuracio de xarxa i botons.
     private JPanel crearPanelNord() {
         JPanel pnlNord = new JPanel(new BorderLayout());

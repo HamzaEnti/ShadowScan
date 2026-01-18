@@ -78,7 +78,8 @@ public class MainFrame extends JFrame {
         // creem el menu lateral
         crearMenuLateral();
     }
-
+    
+    //He fet aquest metode amb l'ajuda d'IA.
     private void crearMenuLateral() {
         JPanel panelDreta = new JPanel();
         panelDreta.setLayout(new BoxLayout(panelDreta, BoxLayout.Y_AXIS));

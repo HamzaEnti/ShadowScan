@@ -148,9 +148,7 @@ public class SecurityPanel extends BasePanel {
         btnExecutar.addActionListener(e -> executarAtac());
     }
     
-    /**
-     * Actualitza els camps segons el mode seleccionat.
-     */
+    //Actualitza els camps segons el mode seleccionat.
     private void actualitzarModeSelecionat() {
         int mode = cmbMode.getSelectedIndex();
         
@@ -176,9 +174,7 @@ public class SecurityPanel extends BasePanel {
         }
     }
     
-    /**
-     * Carrega un fitxer wordlist.
-     */
+    //Carrega un fitxer wordlist.
     private void carregarWordlist() {
         File f = seleccionarFitxer("Selecciona Wordlist");
         if (f != null) {
@@ -193,9 +189,7 @@ public class SecurityPanel extends BasePanel {
         }
     }
     
-    /**
-     * Exporta resultats de Dirb a CSV.
-     */
+    //Exporta resultats de Dirb a CSV.
     private void exportarCsv() {
         File f = guardarFitxer("Guardar CSV", "resultats_web.csv");
         if (f != null && webDiscoveryService != null) {
@@ -205,9 +199,7 @@ public class SecurityPanel extends BasePanel {
         }
     }
     
-    /**
-     * Executa l'atac segons el mode seleccionat.
-     */
+    //Executa l'atac segons el mode seleccionat.
     private void executarAtac() {
         String target = txtTargetIp.getText().trim();
         
@@ -279,20 +271,12 @@ public class SecurityPanel extends BasePanel {
         fuzzingService.lanzarFuzzing(target, port, wordlistPath);
     }
     
-    // =========================================================================
-    // METODES PUBLICS
-    // =========================================================================
-    
-    /**
-     * Estableix la IP des de fora.
-     */
+    //Estableix la IP des de fora.
     public void setTargetIp(String ip) {
         txtTargetIp.setText(ip);
     }
     
-    /**
-     * Verifica quines eines estan instalades i ho mostra.
-     */
+    // Verifica quines eines estan instalades i ho mostra.
     public void verificarInstalacions() {
         if (bruteForceService != null && bruteForceService.checkInstalled()) {
             System.out.println(">>> [OK] Hydra detectat.");
