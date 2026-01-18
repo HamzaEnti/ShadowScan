@@ -52,7 +52,7 @@ public class FuzzingService extends AbstractScanService {
         String url = "http://" + ip + ":" + port + "/FUZZ";
         log("Fuzzing a: " + url);
         resultats.clear(); // netegem resultats anteriors
-
+        //Part feta amb IA
         try {
             ProcessBuilder pb = new ProcessBuilder(
                 "ffuf", 
@@ -81,6 +81,7 @@ public class FuzzingService extends AbstractScanService {
             logError("Ffuf error: " + e.getMessage());
         }
     }
+    //Fi part feta amb IA
     
     // retorna els resultats guardats
     public List<String> getResultats() {
