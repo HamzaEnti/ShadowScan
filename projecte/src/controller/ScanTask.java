@@ -1,52 +1,91 @@
 package controller;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import javax.swing.SwingUtilities; // necessari per tocar la interficie
-
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import javax.swing.SwingUtilities;
 import model.ResultatHost;
 import utils.NetworkUtil;
-import view.MainFrame; // la vista de l'oscar
+import view.MainFrame;
 
 public class ScanTask implements Runnable {
-
+    
+   
     private String ip;
-    private MainFrame vista; // variable per guardar la finestra
+    private MainFrame vista;
+    private PortScanMode mode;
+    private static final int PORT_THREADS = 10;
+    private static final int PORT_TIMEOUT = 50;
 
-    // constructor actualitzat
-    public ScanTask(String ip, MainFrame v) {
+    public ScanTask(String ip, MainFrame v, PortScanMode mode) {
         this.ip = ip;
         this.vista = v;
+        this.mode = mode;
     }
 
     @Override
     public void run() {
-        if (NetworkUtil.isReachable(ip, 200)) {
-            
-            ResultatHost host = new ResultatHost(ip);
-            host.setEsViu(true);
-            
-            // Aqui podrem afegir molts ports a provar
-            // 21:ftp, 22:ssh, 23:telnet, 80:web, 443:https
-            // 3306:mysql, 5432:postgres, 3389:escriptori remot windows, 8080:tomcat/web
-            int[] llistaPorts = {21, 22, 23, 80, 443, 3306, 3389, 5432, 8080};
-            List<Integer> portsTrobats = new ArrayList<>();
-
-            for (int port : llistaPorts) {
-                if (NetworkUtil.isPortOpen(ip, port, 200)) {
-                    portsTrobats.add(port);
-                }
-            }
-            
-            host.setPortsOberts(portsTrobats);
-
-            // ZONA VISUAL: avisem a la pantalla que hem trobat algo
-            // es fa amb invokeLater perque swing no peti amb els fils
-            SwingUtilities.invokeLater(() -> {
-                vista.afegirResultat(host);
-            });
-            
-            System.out.println("trobat: " + ip);
+        // primer comprovem si la IP respon 
+        // timeout de 200ms per no tardar massa
+        if (!NetworkUtil.isReachable(ip, 200)) {
+            // si no respon, no perdem temps escanejant ports
+            return;
         }
+
+        // la IP respon, creem un resultat
+        ResultatHost host = new ResultatHost(ip);
+        host.setEsViu(true);
+
+        // llista thread-safe per guardar els ports que trobem
+        // synchronized perque multiples threads hi escriuran alhora
+        List<Integer> portsOberts = Collections.synchronizedList(new ArrayList<>());
+        
+        // Part feta amb IA
+        ExecutorService portPool = Executors.newFixedThreadPool(PORT_THREADS);
+    
+        if (mode.esParcial()) {
+            // mode parcial: nomes els ports comuns
+            int[] ports = mode.getPorts();
+            for (int port : ports) {
+                portPool.execute(() -> {
+                    if (NetworkUtil.isPortOpen(ip, port, PORT_TIMEOUT)) {
+                        portsOberts.add(port);
+                    }
+                });
+            }
+        } else {
+            // mode full: tots els 65535 ports
+            for (int port = 1; port <= 65535; port++) {
+                final int p = port;
+                portPool.execute(() -> {
+                    if (NetworkUtil.isPortOpen(ip, p, PORT_TIMEOUT / 2)) {
+                        portsOberts.add(p);
+                    }
+                });
+            }
+        }
+        // Fi part feta amb IA
+
+        // esperem que acabin tots els escaneigs de ports
+        portPool.shutdown();
+        try {
+            // donem fins a 10 minuts per escaneig full
+            // per parcial sobra amb menys, pero no fa mal
+            portPool.awaitTermination(10, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            // si ens interrompen, no passa res, retornem el que tenim
+            Thread.currentThread().interrupt();
+        }
+
+        // guardem els ports trobats al resultat
+        host.setPortsOberts(portsOberts);
+
+        // enviem el resultat a la UI
+        // IMPORTANT: hem d'usar invokeLater perque estem en un thread secundari
+        // i Swing no es thread-safe
+        SwingUtilities.invokeLater(() -> vista.afegirResultat(host));
     }
 }

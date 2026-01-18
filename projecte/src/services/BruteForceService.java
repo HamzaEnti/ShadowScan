@@ -2,78 +2,139 @@ package services;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 
-public class BruteForceService {
 
+public class BruteForceService extends AbstractScanService {
+    
+    private String rutaUsuaris;
+    private String rutaPasswords;
+    private List<String> resultats;
+
+    public BruteForceService() {
+        super("HYDRA");
+        this.resultats = new ArrayList<>();
+    }
+
+    @Override
+    public boolean checkInstalled() {
+        try {
+            new ProcessBuilder("hydra", "-h").start();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    @Override
+    public void executar(String target, int port) {
+        if (rutaUsuaris == null || rutaPasswords == null) {
+            logError("Necessites carregar els diccionaris abans!");
+            logError("Usa el metode atacar(ip, port, rutaUsers, rutaPass)");
+            return;
+        }
+        atacar(target, port, rutaUsuaris, rutaPasswords);
+    }
+    
+    public void setDiccionaris(String users, String pass) {
+        this.rutaUsuaris = users;
+        this.rutaPasswords = pass;
+    }
 
     public void atacar(String ip, int port, String rutaUsers, String rutaPass) {
-        
-        // Validacio basica de fitxers
-        if (!validarFitxer(rutaUsers) || !validarFitxer(rutaPass)) {
-            System.out.println("Error: Un dels diccionaris no existeix o no es pot llegir.");
+        if (!fitxerExisteix(rutaUsers)) {
+            logError("Diccionari d'usuaris no trobat: " + rutaUsers);
+            return;
+        }
+        if (!fitxerExisteix(rutaPass)) {
+            logError("Diccionari de passwords no trobat: " + rutaPass);
             return;
         }
 
-        // Detectem protocol (Hydra suporta moltissims, aqui posem els basics)
-        String protocol = "http-get"; 
-        if (port == 21) protocol = "ftp";
-        if (port == 22) protocol = "ssh";
-        if (port == 3306) protocol = "mysql";
-        if (port == 445) protocol = "smb";
-        if (port == 5432) protocol = "postgres";
+        String protocol = determinarProtocol(port);
+        resultats.clear(); // netegem resultats anteriors
 
-        System.out.println("Iniciant atac Hydra Professional contra " + ip + ":" + port + " (" + protocol + ")");
-        System.out.println("Usant diccionari usuaris: " + rutaUsers);
-        System.out.println("Usant diccionari passwords: " + rutaPass);
+        log("Iniciant atac a " + ip + " pel port " + port + " (" + protocol + ")...");
+        log("Diccionaris carregats. Aixo pot tardar una estona.");
 
         try {
-            // Construim la comanda passant les rutes DIRECTAMENT
-            // -L (fitxer usuaris), -P (fitxer passwords), -t 4 (fils), -I (ignora restores)
             ProcessBuilder pb = new ProcessBuilder(
                 "hydra",
                 "-L", rutaUsers,
                 "-P", rutaPass,
                 "-s", String.valueOf(port),
                 "-t", "4",
-                "-I", 
+                "-I",
                 protocol + "://" + ip
             );
 
             pb.redirectErrorStream(true);
             Process p = pb.start();
 
-            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-            String linia;
-            boolean exit = false;
+            BufferedReader reader = new BufferedReader(
+                new InputStreamReader(p.getInputStream())
+            );
+            String line;
 
-            System.out.println("Hydra esta treballant... (Aixo pot tardar si el diccionari es gran)");
-
-            while ((linia = reader.readLine()) != null) {
-                // Hydra te un output molt brut, busquem la pepita d'or
-                if (linia.contains("login:") && linia.contains("password:")) {
-                    System.out.println("\n CREDENCIALS VALIDES TROBADES ");
-                    System.out.println(linia.trim());
-                    exit = true;
-                }
+            while ((line = reader.readLine()) != null) {
+                System.out.println("[HYDRA] " + line);
+                resultats.add(line); // guardem cada linia
             }
+
             p.waitFor();
-
-            if (!exit) {
-                System.out.println("L'atac ha finalitzat sense trovar contrasenyes amb aquests diccionaris.");
-            }
+            log("Atac finalitzat.");
 
         } catch (Exception e) {
-            System.out.println("Error critic executant Hydra: " + e.getMessage());
+            logError("Hydra error: " + e.getMessage());
         }
     }
-
-    private boolean validarFitxer(String ruta) {
-        File f = new File(ruta);
-        if (!f.exists()) {
-            System.out.println("Error: No trovo el fitxer -> " + ruta);
+    
+    private String determinarProtocol(int port) {
+        switch (port) {
+            case 21:   return "ftp";
+            case 22:   return "ssh";
+            case 23:   return "telnet";
+            case 80:   return "http-get";
+            case 443:  return "https-get";
+            case 3306: return "mysql";
+            case 3389: return "rdp";
+            case 5432: return "postgres";
+            default:   return "ssh";
+        }
+    }
+    
+    // retorna els resultats guardats
+    public List<String> getResultats() {
+        return new ArrayList<>(resultats);
+    }
+    
+    // exporta resultats a CSV
+    public boolean exportToCSV(File file) {
+        if (resultats.isEmpty()) {
+            log("No hi ha resultats per exportar.");
             return false;
         }
-        return true;
+        
+        try (FileWriter writer = new FileWriter(file)) {
+            writer.write("LINIA,CONTINGUT,DATA\n");
+            
+            int numLinia = 1;
+            for (String s : resultats) {
+                String escaped = s.replace("\"", "\"\"");
+                writer.write(numLinia + ",\"" + escaped + "\",\"" + new java.util.Date() + "\"\n");
+                numLinia++;
+            }
+            
+            log("CSV Exportat: " + file.getAbsolutePath());
+            return true;
+            
+        } catch (IOException e) {
+            logError("Error exportant CSV: " + e.getMessage());
+            return false;
+        }
     }
 }
