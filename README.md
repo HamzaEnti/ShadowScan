@@ -191,6 +191,9 @@ shadowscan/
     +-- diagrama_classes.mermaid
     +-- diagrama_estats.mermaid
     +-- diagrama_flux.mermaid
+    +-- diagrama_classes.png
+    +-- diagrama_estats.png
+    +-- diagrama_flux.png
 ```
 
 ---
