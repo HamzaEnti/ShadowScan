@@ -55,7 +55,7 @@ public class NmapPanel extends BasePanel {
         gbc.gridx = 0;
         gbc.gridy = 2;
         gbc.gridwidth = 2;
-        btnExecutar = new JButton("EXECUTAR ANALISI");
+        btnExecutar = new JButton("EXECUTE ANALYSIS");
         btnExecutar.setPreferredSize(new Dimension(200, 40));
         btnExecutar.setFont(FONT_BOTO);
         this.add(btnExecutar, gbc);

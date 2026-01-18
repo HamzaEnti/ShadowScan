@@ -44,7 +44,7 @@ public class MainFrame extends JFrame {
     }
     
     private void configurarFinestra() {
-        this.setTitle("Scanner Security Suite v4.0");
+        this.setTitle("ShadowScan - Network Security Toolkit");
         this.setSize(1100, 750);
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.setLayout(new BorderLayout());
@@ -87,7 +87,7 @@ public class MainFrame extends JFrame {
         panelDreta.setBackground(new Color(245, 245, 245));
 
         // titol del menu
-        JLabel lblMenu = new JLabel("MENU PRINCIPAL");
+        JLabel lblMenu = new JLabel("MAIN MENU");
         lblMenu.setFont(new Font("Arial", Font.BOLD, 14));
         lblMenu.setAlignmentX(Component.CENTER_ALIGNMENT);
 
