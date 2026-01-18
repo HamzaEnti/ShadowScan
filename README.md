@@ -24,7 +24,7 @@ Plataforma de seguretat informatica amb interficie grafica que unifica multiples
     - [Model de Concurrencia](#model-de-concurrencia)
 6. [Instalacio](#instalacio)
 7. [Configuracio](#configuracio)
-8. [Us d'Intel·ligencia Artificial](#Us-d'Intel·ligencia-Artificial)
+8. [Us d'Intel·ligencia Artificial](#us-dintelligencia-artificial)
 9. [Roadmap](#roadmap)
 10. [Autors](#autors)
 11. [Llicencia](#llicencia)
