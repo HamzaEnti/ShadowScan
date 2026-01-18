@@ -58,9 +58,10 @@ public class BruteForceService extends AbstractScanService {
         String protocol = determinarProtocol(port);
         resultats.clear(); // netegem resultats anteriors
 
+        // Part feta amb IA
         log("Iniciant atac a " + ip + " pel port " + port + " (" + protocol + ")...");
         log("Diccionaris carregats. Aixo pot tardar una estona.");
-
+        
         try {
             ProcessBuilder pb = new ProcessBuilder(
                 "hydra",
@@ -92,6 +93,7 @@ public class BruteForceService extends AbstractScanService {
             logError("Hydra error: " + e.getMessage());
         }
     }
+    // Fi part feta amb IA
     
     private String determinarProtocol(int port) {
         switch (port) {
