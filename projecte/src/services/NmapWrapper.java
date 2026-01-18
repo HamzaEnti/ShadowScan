@@ -39,7 +39,7 @@ public class NmapWrapper extends AbstractScanService {
     public void escanearConNmap(String ip) {
         log("Llancant comanda contra: " + ip);
         resultats.clear(); // netegem resultats anteriors
-
+        //Part feta amb IA
         try {
             ProcessBuilder pb = new ProcessBuilder("nmap", "-sV", "-T4", ip);
             pb.redirectErrorStream(true);
@@ -68,7 +68,7 @@ public class NmapWrapper extends AbstractScanService {
             logError("Fallada executant Nmap: " + e.getMessage());
             e.printStackTrace();
         }
-    }
+    }//Fi part feta amb IA
     
     // retorna els resultats guardats
     public List<String> getResultats() {
