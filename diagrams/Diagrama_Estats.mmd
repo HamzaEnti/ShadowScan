@@ -1,0 +1,19 @@
+stateDiagram-v2
+    [*] --> Iniciant
+    Iniciant --> MenuPrincipal: App carregada
+    MenuPrincipal --> Discovery: Seleccionar Discovery
+    MenuPrincipal --> Nmap: Seleccionar Nmap
+    MenuPrincipal --> Security: Seleccionar Security
+    MenuPrincipal --> [*]: Tancar
+    Discovery --> Escanejant: Iniciar escaneig
+    Escanejant --> Resultats: Escaneig completat
+    Resultats --> Discovery: Nova cerca
+    Resultats --> MenuPrincipal: Sortir
+    Nmap --> Analitzant: Executar nmap
+    Analitzant --> ResultatsNmap: Anàlisi completada
+    ResultatsNmap --> Nmap: Nou anàlisi
+    ResultatsNmap --> MenuPrincipal: Sortir
+    Security --> Atacant: Executar eina
+    Atacant --> ResultatsSecurity: Atac completat
+    ResultatsSecurity --> Security: Nou atac
+    ResultatsSecurity --> MenuPrincipal: Sortir
