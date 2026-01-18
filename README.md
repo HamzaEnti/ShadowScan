@@ -1,9 +1,9 @@
 # SHADOWSCAN
 
 [![Java Version](https://img.shields.io/badge/java-11%2B-ED8B00?style=for-the-badge&logo=openjdk)](https://www.oracle.com/es/java/technologies/javase/jdk11-archive-downloads.html)
-![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
-![Status](https://img.shields.io/badge/status-active-success?style=for-the-badge)
-![Architecture](https://img.shields.io/badge/architecture-MVC-blue?style=for-the-badge)
+[![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](https://github.com/HamzaEnti/ShadowScan/blob/main/LICENSE)
+[![Status](https://img.shields.io/badge/status-active-success?style=for-the-badge)](https://github.com/HamzaEnti/ShadowScan)
+[![Architecture](https://img.shields.io/badge/architecture-MVC-blue?style=for-the-badge)](https://en.wikipedia.org/wiki/Model%E2%80%93view%E2%80%93controller)
 
 Plataforma de seguretat informatica amb interficie grafica que unifica multiples eines de pentesting en una sola aplicacio. Desenvolupada per a professionals de ciberseguretat i administradors de sistemes que necessiten realitzar auditories de xarxa de manera eficient i visual.
 
