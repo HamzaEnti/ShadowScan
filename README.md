@@ -24,11 +24,10 @@ Plataforma de seguretat informatica amb interficie grafica que unifica multiples
     - [Model de Concurrencia](#model-de-concurrencia)
 6. [Instalacio](#instalacio)
 7. [Configuracio](#configuracio)
-8. [Diagrames UML](#diagrames-uml)
-9. [Us d'Intel·ligencia Artificial](#us-dintel·ligencia-artificial)
-10. [Roadmap](#roadmap)
-11. [Autors](#autors)
-12. [Llicencia](#llicencia)
+8. [Us d'Intel·ligencia Artificial](#Us-d'Intel·ligencia-Artificial)
+9. [Roadmap](#roadmap)
+10. [Autors](#autors)
+11. [Llicencia](#llicencia)
 
 ---
 
