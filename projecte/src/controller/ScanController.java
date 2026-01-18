@@ -15,11 +15,13 @@ public class ScanController {
         this.vista = v;
         this.enExecucio = false;
     }
-
+    
     public void escanearRang(String xarxa, PortScanMode mode) {
         // creem un pool nou cada vegada 
+        // Part Feta amb IA
         pool = Executors.newFixedThreadPool(NUM_THREADS);
         enExecucio = true;
+        // Fi part Feta amb IA
 
         System.out.println(">>> [SCAN] Iniciant escaneig de " + xarxa + "0/24");
         System.out.println(">>> [SCAN] Mode: " + mode.getDescripcio());
