@@ -2,49 +2,56 @@ package controller;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import view.MainFrame; // importo la vista nova
+import view.MainFrame;
 
 public class ScanController {
 
-    private ExecutorService pool;
+    private ExecutorService pool; 
     private boolean enExecucio; 
-    private MainFrame vista; // guardo la referencia a la finestra
+    private MainFrame vista;
+    private static final int NUM_THREADS = 20;
 
-    // constructor modificat: ara rep la vista
     public ScanController(MainFrame v) {
         this.vista = v;
         this.enExecucio = false;
     }
 
-    public void escanearRang(String xarxa) {
-        System.out.println("iniciant escaneig a: " + xarxa);
-        
-        if (pool != null && !pool.isTerminated()) {
-            pool.shutdownNow();
-        }
-
-        pool = Executors.newFixedThreadPool(20);
+    public void escanearRang(String xarxa, PortScanMode mode) {
+        // creem un pool nou cada vegada 
+        pool = Executors.newFixedThreadPool(NUM_THREADS);
         enExecucio = true;
 
-        for (int i = 1; i <= 254; i++) {
-            if (!enExecucio) break; 
+        System.out.println(">>> [SCAN] Iniciant escaneig de " + xarxa + "0/24");
+        System.out.println(">>> [SCAN] Mode: " + mode.getDescripcio());
 
-            String ipObjectiu = xarxa + i;
+        // escanegem de .1 a .254 
+        for (int i = 1; i <= 254; i++) {
+            // si l'usuari ha dit d'aturar, parem
+            if (!enExecucio) {
+                System.out.println(">>> [SCAN] Escaneig aturat per l'usuari");
+                break;
+            }
             
-            // AQUI EL CANVI IMPORTANT:
-            // passo la vista a la tasca perque pugui pintar la taula
-            ScanTask tasca = new ScanTask(ipObjectiu, vista);
-            pool.execute(tasca);
+            String ip = xarxa + i;
+            // creem una tasca per cada IP i la posem a la cua
+            pool.execute(new ScanTask(ip, vista, mode));
         }
 
+        // shutdown graceful: no accepta mes tasques pero deixa acabar les que estan en curs
         pool.shutdown();
     }
 
+   
     public void aturar() {
-        System.out.println("aturant...");
+        System.out.println(">>> [SCAN] Aturant escaneig...");
         enExecucio = false;
+        
         if (pool != null) {
             pool.shutdownNow();
         }
+    }
+    
+    public boolean isEnExecucio() {
+        return enExecucio;
     }
 }
