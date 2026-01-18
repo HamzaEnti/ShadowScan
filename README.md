@@ -20,14 +20,12 @@ Plataforma de seguretat informatica amb interficie grafica que unifica multiples
     - [Patro MVC](#patro-mvc)
     - [Estructura del Projecte](#estructura-del-projecte)
 5. [Detalls Tecnics](#detalls-tecnics)
-    - [Disseny Orientat a Objectes](#disseny-orientat-a-objectes)
     - [Model de Concurrencia](#model-de-concurrencia)
 6. [Instalacio](#instalacio)
 7. [Configuracio](#configuracio)
 8. [Us d'Intel·ligencia Artificial](#us-dintelligencia-artificial)
 9. [Roadmap](#roadmap)
 10. [Autors](#autors)
-11. [Llicencia](#llicencia)
 
 ---
 
