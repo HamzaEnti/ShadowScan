@@ -357,6 +357,29 @@ En iniciar l'aplicacio, la consola mostrara l'estat de les dependencies:
 | 8080 | HTTP Proxy | TCP |
 
 ---
+## Us d'Intel·ligencia Artificial
+
+Durant el desenvolupament de SHADOWSCAN, s'ha utilitzat Intel·ligència Artificial com a eina de suport en diversos aspectes del projecte:
+
+### Àrees on s'ha utilitzat IA
+
+1. **Generació de documentació tècnica**
+   - Estructuració del README
+     
+2. **Revisió i optimització de codi**
+   - Identificació de possibles millores en la gestió de threads
+   - Suggeriments per a la implementació de patrons de disseny
+   - Detecció de possibles problemes de concurrència
+
+3. **Generació de diagrames UML**
+   - Assistència en la creació de diagrames
+   - Generació de codi Mermaid per als diagrames
+   - Validació de les relacions entre components
+
+4. **Resolució de problemes tècnics**
+   - Debugging de problemes amb ProcessBuilder
+   - Solucions per a la sincronització entre threads i Swing
+   - Optimització de la captura de sortida de processos externs
 
 ## Roadmap
 Estem treballant per fer créixer el projecte i aquí tenim un recull dels objectius que ens hem marcat per a les properes versions, des de millores tècniques fins a noves interfícies d'usuari.
