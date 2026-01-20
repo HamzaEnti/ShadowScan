@@ -306,6 +306,10 @@ cd ../bin
 java Main
 ```
 
+4. **Preview de l'aplicacio**
+
+https://github.com/user-attachments/assets/60fb99e6-6aa6-4d0d-8e14-ed07f73956d8
+
 ### Verificacio de la Instalacio
 
 En iniciar l'aplicacio, la consola mostrara l'estat de les dependencies:
