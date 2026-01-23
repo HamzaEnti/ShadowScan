@@ -183,15 +183,8 @@ shadowscan/
 |       +-- ConsoleDebug.java            # Utilitats de depuracio
 |
 +-- resources/                           # Recursos externs
-|   +-- wordlists/                       # Diccionaris per atacs
-|
-+-- diagrams/                            # Documentacio tecnica
-    +-- diagrama_classes.mermaid
-    +-- diagrama_estats.mermaid
-    +-- diagrama_flux.mermaid
-    +-- diagrama_classes.png
-    +-- diagrama_estats.png
-    +-- diagrama_flux.png
+    +-- wordlists/                       # Diccionaris per atacs
+
 ```
 
 ---
@@ -373,12 +366,7 @@ Durant el desenvolupament de SHADOWSCAN, s'ha utilitzat Intel·ligència Artific
    - Suggeriments per a la implementació de patrons de disseny
    - Detecció de possibles problemes de concurrència
 
-3. **Generació de diagrames UML**
-   - Assistència en la creació de diagrames
-   - Generació de codi Mermaid per als diagrames
-   - Validació de les relacions entre components
-
-4. **Resolució de problemes tècnics**
+3. **Resolució de problemes tècnics**
    - Debugging de problemes amb ProcessBuilder
    - Solucions per a la sincronització entre threads i Swing
    - Optimització de la captura de sortida de processos externs
