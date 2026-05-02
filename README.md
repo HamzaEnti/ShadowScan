@@ -34,7 +34,7 @@ Plataforma de seguretat informatica amb interficie grafica que unifica multiples
  
 > Versió publicada el **2 de maig de 2026**. Aquesta actualització corregeix tots els bugs detectats a la v1.0, millora la robustesa del sistema de concurrència i incorpora integració nativa amb **RedTrace**.
  
-### 🐛 Bugs corregits
+### Bugs corregits
  
 | Fitxer | Bug | Solució aplicada |
 |--------|-----|-----------------|
