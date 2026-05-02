@@ -43,14 +43,14 @@ Plataforma de seguretat informatica amb interficie grafica que unifica multiples
 | `BruteForceService.java` | `checkInstalled()` no esperava el procés → procés zombie en background | Afegit `waitFor()` + `destroy()` si supera timeout, igual que `NmapWrapper` |
 | `DiscoveryPanel.java` | El botó "Guardar JSON" estava actiu durant l'escaneig → exportació incompleta | Botó deshabilitat durant el scan, s'habilita via callback quan acaba |
  
-### ⚠️ Warnings resolts
+### Warnings resolts
  
 - **Processos sense timeout**: Nmap, Hydra, Dirb i Ffuf podien quedar penjats indefinidament. Ara tots tenen un timeout de 5–10 minuts amb terminació forçada.
 - **`java.util.Date` deprecated**: Substituït per `LocalDateTime.now()` a tots els exportadors CSV (`NmapWrapper`, `BruteForceService`, `WebDiscoveryService`, `FuzzingService`).
 - **`saveToJSONPretty()` silenciava errors**: La `IOException` es capturava sense cap missatge. Ara es logueja correctament.
 - **Validació d'IP massa permissiva**: La comprovació `ip.contains(".")` acceptava qualsevol cadena. Substituïda per regex completa (`^((25[0-5]|...)\.){3}...$`).
 - **`WebDiscoveryService.checkInstalled()` zombie**: Mateix problema que Hydra. Corregit amb `waitFor()` i `destroy()`.
-### ✨ Noves funcionalitats
+### Noves funcionalitats
  
 **Integració amb RedTrace**
  
@@ -67,14 +67,14 @@ El botó **"Exportar RedTrace"** apareix al panel de Discovery un cop finalitzat
  
 La taula de resultats incorpora una columna **Risc** (BAIX / MITJÀ / CRÍTIC) amb codi de colors per files:
  
-- 🔴 CRÍTIC — hosts amb Telnet, SMB, RDP o FTP oberts
-- 🟡 MITJÀ — hosts amb SSH, MySQL, PostgreSQL o MSSQL oberts
-- ⚪ BAIX — resta de casos
+- CRÍTIC — hosts amb Telnet, SMB, RDP o FTP oberts
+- MITJÀ — hosts amb SSH, MySQL, PostgreSQL o MSSQL oberts
+- BAIX — resta de casos
 **Callback de fi d'escaneig**
  
 `ScanController` incorpora la interfície `ScanCallback` que notifica quan tots els threads han acabat. Permet actualitzar la UI (progress bar, botons, comptador) sense polling ni timers.
  
-### 🎨 Millores de disseny
+### Millores de disseny
  
 **Barra lateral fosca (sidebar)**
  
@@ -430,20 +430,20 @@ En iniciar l'aplicacio, la consola mostrara l'estat de les dependencies:
  
 | Port | Servei | Protocol | Nivell de Risc |
 |------|--------|----------|----------------|
-| 21 | FTP | TCP | 🔴 Alt |
-| 22 | SSH | TCP | 🟡 Mig |
-| 23 | Telnet | TCP | 🔴 Alt |
-| 25 | SMTP | TCP | ⚪ Baix |
-| 53 | DNS | TCP/UDP | ⚪ Baix |
-| 80 | HTTP | TCP | ⚪ Baix |
-| 110 | POP3 | TCP | ⚪ Baix |
-| 139 | NetBIOS | TCP | 🔴 Alt |
-| 143 | IMAP | TCP | ⚪ Baix |
-| 443 | HTTPS | TCP | ⚪ Baix |
-| 445 | SMB | TCP | 🔴 Alt |
-| 3306 | MySQL | TCP | 🟡 Mig |
-| 3389 | RDP | TCP | 🔴 Alt |
-| 8080 | HTTP Proxy | TCP | ⚪ Baix |
+| 21 | FTP | TCP | Alt |
+| 22 | SSH | TCP | Mig |
+| 23 | Telnet | TCP | Alt |
+| 25 | SMTP | TCP | Baix |
+| 53 | DNS | TCP/UDP | Baix |
+| 80 | HTTP | TCP | Baix |
+| 110 | POP3 | TCP | Baix |
+| 139 | NetBIOS | TCP | Alt |
+| 143 | IMAP | TCP | Baix |
+| 443 | HTTPS | TCP | Baix |
+| 445 | SMB | TCP | Alt |
+| 3306 | MySQL | TCP | Mig |
+| 3389 | RDP | TCP | Alt |
+| 8080 | HTTP Proxy | TCP | Baix |
  
 ---
  
