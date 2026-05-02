@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import javax.swing.SwingUtilities;
 import model.ResultatHost;
@@ -12,13 +13,16 @@ import utils.NetworkUtil;
 import view.MainFrame;
 
 public class ScanTask implements Runnable {
-    
-   
+
     private String ip;
     private MainFrame vista;
     private PortScanMode mode;
-    private static final int PORT_THREADS = 10;
+    private static final int PORT_THREADS = 50;
     private static final int PORT_TIMEOUT = 50;
+    // FIX: limitem les tasques en cua per evitar OutOfMemoryError en mode FULL
+    // Sense això, mode FULL encolava 65535 Runnable per host × 20 hosts = ~1.3M objectes en RAM
+    // Assisted by Claude (Anthropic) — semaphore-based backpressure for full port scan
+    private static final int MAX_QUEUED = 500;
 
     public ScanTask(String ip, MainFrame v, PortScanMode mode) {
         this.ip = ip;
@@ -28,26 +32,19 @@ public class ScanTask implements Runnable {
 
     @Override
     public void run() {
-        // primer comprovem si la IP respon 
-        // timeout de 200ms per no tardar massa
         if (!NetworkUtil.isReachable(ip, 200)) {
-            // si no respon, no perdem temps escanejant ports
             return;
         }
 
-        // la IP respon, creem un resultat
         ResultatHost host = new ResultatHost(ip);
         host.setEsViu(true);
 
-        // llista thread-safe per guardar els ports que trobem
-        // synchronized perque multiples threads hi escriuran alhora
         List<Integer> portsOberts = Collections.synchronizedList(new ArrayList<>());
-        
-        // Part feta amb IA
+
         ExecutorService portPool = Executors.newFixedThreadPool(PORT_THREADS);
-    
+
         if (mode.esParcial()) {
-            // mode parcial: nomes els ports comuns
+            // mode parcial: ports comuns — no hi ha risc de memoria
             int[] ports = mode.getPorts();
             for (int port : ports) {
                 portPool.execute(() -> {
@@ -57,35 +54,38 @@ public class ScanTask implements Runnable {
                 });
             }
         } else {
-            // mode full: tots els 65535 ports
+            // FIX mode FULL: usem semàfor per limitar les tasques en cua
+            // Sense això eren 65535 Runnable encolats per host → OOM possible
+            Semaphore sem = new Semaphore(MAX_QUEUED);
             for (int port = 1; port <= 65535; port++) {
                 final int p = port;
+                try {
+                    sem.acquire(); // bloqueja si la cua és plena
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
                 portPool.execute(() -> {
-                    if (NetworkUtil.isPortOpen(ip, p, PORT_TIMEOUT / 2)) {
-                        portsOberts.add(p);
+                    try {
+                        if (NetworkUtil.isPortOpen(ip, p, PORT_TIMEOUT / 2)) {
+                            portsOberts.add(p);
+                        }
+                    } finally {
+                        sem.release(); // allibera espai a la cua
                     }
                 });
             }
         }
-        // Fi part feta amb IA
 
-        // esperem que acabin tots els escaneigs de ports
         portPool.shutdown();
         try {
-            // donem fins a 10 minuts per escaneig full
-            // per parcial sobra amb menys, pero no fa mal
             portPool.awaitTermination(10, TimeUnit.MINUTES);
         } catch (InterruptedException e) {
-            // si ens interrompen, no passa res, retornem el que tenim
             Thread.currentThread().interrupt();
         }
 
-        // guardem els ports trobats al resultat
         host.setPortsOberts(portsOberts);
 
-        // enviem el resultat a la UI
-        // IMPORTANT: hem d'usar invokeLater perque estem en un thread secundari
-        // i Swing no es thread-safe
         SwingUtilities.invokeLater(() -> vista.afegirResultat(host));
     }
 }

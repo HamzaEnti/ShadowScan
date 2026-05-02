@@ -8,199 +8,277 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
 import model.ResultatHost;
 import utils.JsonExporter;
 
-// Panel per a l'escaneig de xarxa (Network Discovery).
-
 public class DiscoveryPanel extends BasePanel {
-    
-    // components del formulari
+
     private JTextField txtIpInici;
     private JTextField txtIpFi;
     private JRadioButton rbPortsComuns;
     private JRadioButton rbTotsPorts;
-    
-    // botons d'accio
+
     private JButton btnStart;
     private JButton btnStop;
     private JButton btnExport;
-    
-    // taula de resultats
+    private JButton btnExportRedTrace;
+
     private JTable taula;
     private DefaultTableModel modelTaula;
-    
-    // controlador i dades
+
+    // MILLORA: progress bar i comptador visual
+    private JProgressBar progressBar;
+    private JLabel lblProgress;
+    private int hostsEscanejats = 0;
+
     private ScanController controller;
     private List<ResultatHost> resultats;
-    
+
     public DiscoveryPanel(MainFrame parent) {
         super(parent);
     }
-    
+
     @Override
     protected void initComponents() {
-        // inicialitzem dades
         this.resultats = new ArrayList<>();
         this.controller = new ScanController(parentFrame);
-        
-        // layout principal
+
+        // FIX: callback per saber quan acaba el scan i habilitar el botó export
+        controller.setCallback(hostsFound -> SwingUtilities.invokeLater(() -> {
+            btnExport.setEnabled(true);
+            btnExportRedTrace.setEnabled(true);
+            btnStart.setEnabled(true);
+            btnStop.setEnabled(false);
+            progressBar.setIndeterminate(false);
+            progressBar.setValue(100);
+            lblProgress.setText("Escaneig finalitzat. " + resultats.size() + " hosts trobats.");
+        }));
+
         this.setLayout(new BorderLayout());
-        
-        // creem els diferents panels
+
         JPanel pnlNord = crearPanelNord();
         JPanel pnlCentre = crearPanelTaula();
-        
+
         this.add(pnlNord, BorderLayout.NORTH);
         this.add(pnlCentre, BorderLayout.CENTER);
-        
-        // configurem els listeners
+
         configurarListeners();
     }
-    
-    //He fet aquest metode amb l'ajuda d'IA.
-    //Crea el panel superior amb la configuracio de xarxa i botons.
+
     private JPanel crearPanelNord() {
         JPanel pnlNord = new JPanel(new BorderLayout());
-        
-        // panel de configuracio d'IP
-        JPanel pnlConfig = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        pnlConfig.setBorder(BorderFactory.createTitledBorder("Configuracio de Xarxa"));
-        
+
+        // ── Configuració de xarxa ──
+        JPanel pnlConfig = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
+        pnlConfig.setBorder(BorderFactory.createTitledBorder("Configuració de Xarxa"));
+
         pnlConfig.add(new JLabel("IP Inici:"));
-        txtIpInici = crearCampText(10);
+        txtIpInici = crearCampText(12);
         pnlConfig.add(txtIpInici);
-        
+
         pnlConfig.add(new JLabel("IP Fi:"));
-        txtIpFi = crearCampText(10);
+        txtIpFi = crearCampText(12);
+        // MILLORA: txtIpFi ara s'usa per calcular el rang real
         pnlConfig.add(txtIpFi);
-        
-        // botons
+
         btnStart = crearBoto("Escanejar", COLOR_VERD);
-        btnStop = crearBoto("Aturar", COLOR_SALMO);
+        btnStop  = crearBoto("Aturar", COLOR_SALMO);
+        btnStop.setEnabled(false);
+
+        // FIX: export deshabilitiat fins que hi hagi dades
         btnExport = crearBoto("Guardar JSON");
-        
+        btnExport.setEnabled(false);
+
+        btnExportRedTrace = crearBoto("Exportar RedTrace");
+        btnExportRedTrace.setEnabled(false);
+        btnExportRedTrace.setBackground(new Color(200, 230, 255));
+
         pnlConfig.add(btnStart);
         pnlConfig.add(btnStop);
         pnlConfig.add(btnExport);
-        
-        // panel de mode d'escaneig
-        JPanel pnlMode = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        pnlConfig.add(btnExportRedTrace);
+
+        // ── Mode d'escaneig ──
+        JPanel pnlMode = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 4));
         pnlMode.setBorder(BorderFactory.createTitledBorder("Mode d'escaneig"));
-        
-        rbPortsComuns = new JRadioButton("Ports comuns (rapid)", true);
-        rbTotsPorts = new JRadioButton("Tots els ports (lent)");
-        
-        // agrupem els radio buttons perque nomes un pugui estar seleccionat
+
+        rbPortsComuns = new JRadioButton("Ports comuns (ràpid)", true);
+        rbTotsPorts   = new JRadioButton("Tots els ports (lent)");
+
         ButtonGroup grup = new ButtonGroup();
         grup.add(rbPortsComuns);
         grup.add(rbTotsPorts);
-        
+
         pnlMode.add(rbPortsComuns);
         pnlMode.add(rbTotsPorts);
-        
-        // juntem tot
-        pnlNord.add(pnlConfig, BorderLayout.NORTH);
-        pnlNord.add(pnlMode, BorderLayout.SOUTH);
-        
+
+        // ── Progress bar ──
+        JPanel pnlProgress = new JPanel(new BorderLayout(8, 0));
+        pnlProgress.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+        progressBar = new JProgressBar(0, 100);
+        progressBar.setStringPainted(false);
+        lblProgress = new JLabel("Prem Escanejar per començar.");
+        lblProgress.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        lblProgress.setForeground(Color.GRAY);
+        pnlProgress.add(progressBar, BorderLayout.CENTER);
+        pnlProgress.add(lblProgress, BorderLayout.EAST);
+
+        pnlNord.add(pnlConfig,   BorderLayout.NORTH);
+        pnlNord.add(pnlMode,     BorderLayout.CENTER);
+        pnlNord.add(pnlProgress, BorderLayout.SOUTH);
+
         return pnlNord;
     }
-    
-    // Crea el panel central amb la taula de resultats.
+
     private JPanel crearPanelTaula() {
         JPanel pnl = new JPanel(new BorderLayout());
-        
-        // definim les columnes de la taula
-        String[] columnes = {"IP Adreca", "Estat", "Ports Detectats"};
-        modelTaula = new DefaultTableModel(columnes, 0);
+
+        String[] columnes = {"IP Adreça", "Estat", "Ports Detectats", "Risc"};
+        modelTaula = new DefaultTableModel(columnes, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+        };
         taula = new JTable(modelTaula);
-        
-        // posem la taula dins un scroll per si hi ha molts resultats
+        taula.setRowHeight(22);
+        taula.setFont(new Font("Consolas", Font.PLAIN, 12));
+        taula.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        taula.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        taula.setGridColor(new Color(230, 230, 230));
+
+        // MILLORA: color per files de risc alt
+        taula.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable t, Object val,
+                    boolean sel, boolean foc, int row, int col) {
+                Component c = super.getTableCellRendererComponent(t, val, sel, foc, row, col);
+                String risc = (String) t.getValueAt(row, 3);
+                if (!sel) {
+                    if ("CRÍTIC".equals(risc))  c.setBackground(new Color(255, 230, 230));
+                    else if ("MITJÀ".equals(risc)) c.setBackground(new Color(255, 248, 220));
+                    else c.setBackground(Color.WHITE);
+                }
+                return c;
+            }
+        });
+
         JScrollPane scroll = new JScrollPane(taula);
+        scroll.setBorder(BorderFactory.createTitledBorder("Hosts Descoberts"));
         pnl.add(scroll, BorderLayout.CENTER);
-        
+
         return pnl;
     }
-    
-    // Configura tots els listeners dels botons. Ho tinc separat per no barrejar creacio de UI amb logica.
+
     private void configurarListeners() {
-        // boto escanejar
         btnStart.addActionListener(e -> iniciarEscaneig());
-        
-        // boto aturar
-        btnStop.addActionListener(e -> controller.aturar());
-        
-        // boto exportar
+        btnStop.addActionListener(e -> {
+            controller.aturar();
+            btnStop.setEnabled(false);
+            btnStart.setEnabled(true);
+            progressBar.setIndeterminate(false);
+            lblProgress.setText("Escaneig aturat per l'usuari.");
+        });
         btnExport.addActionListener(e -> exportarResultats());
+        btnExportRedTrace.addActionListener(e -> exportarRedTrace());
     }
-    
-    // Inicia l'escaneig de xarxa.
+
     private void iniciarEscaneig() {
-        String ip = txtIpInici.getText().trim();
-        
-        // validacio basica
-        if (!ip.contains(".")) {
-            System.out.println(">>> [ERROR] Format IP incorrecte");
+        String ipInici = txtIpInici.getText().trim();
+
+        // FIX: validació d'IP millorada
+        if (!ipValida(ipInici)) {
+            JOptionPane.showMessageDialog(this,
+                "Introdueix una IP vàlida (ex: 192.168.1.1)",
+                "IP incorrecta", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        
-        // extraiem el prefix de xarxa (ex: "192.168.1." de "192.168.1.100")
-        String xarxa = ip.substring(0, ip.lastIndexOf(".") + 1);
-        
-        // determinem el mode
-        PortScanMode mode = rbPortsComuns.isSelected() ? 
-                          PortScanMode.PARCIAL : PortScanMode.FULL;
-        
-        System.out.println(">>> [SCAN] Iniciant escombrat a " + xarxa + "0/24...");
-        
-        // netegem resultats anteriors
+
+        // FIX: bloquejar export mentre s'escaneja
+        btnExport.setEnabled(false);
+        btnExportRedTrace.setEnabled(false);
+        btnStart.setEnabled(false);
+        btnStop.setEnabled(true);
+
+        // MILLORA: feedback visual
+        progressBar.setIndeterminate(true);
+        hostsEscanejats = 0;
         resultats.clear();
         modelTaula.setRowCount(0);
-        
-        // cridem al controlador
+        lblProgress.setText("Escanejant xarxa...");
+
+        String xarxa = ipInici.substring(0, ipInici.lastIndexOf(".") + 1);
+        PortScanMode mode = rbPortsComuns.isSelected() ? PortScanMode.PARCIAL : PortScanMode.FULL;
+
+        System.out.println(">>> [SCAN] Iniciant escombrat a " + xarxa + "0/24...");
         controller.escanearRang(xarxa, mode);
     }
-    
-    //Exporta els resultats a un fitxer JSON.
+
+    // FIX: nova exportació per a RedTrace
+    private void exportarRedTrace() {
+        File fitxer = guardarFitxer("Guardar topologia RedTrace", "topology.json");
+        if (fitxer != null) {
+            if (JsonExporter.saveToTopology(resultats, fitxer.getAbsolutePath())) {
+                JOptionPane.showMessageDialog(this,
+                    "Topologia RedTrace guardada!\n" + fitxer.getName(),
+                    "Export OK", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, "Error guardant la topologia",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        }
+    }
+
     private void exportarResultats() {
         File fitxer = guardarFitxer("Guardar resultats", "resultats.json");
         if (fitxer != null) {
             if (JsonExporter.saveToJSON(resultats, fitxer.getAbsolutePath())) {
                 JOptionPane.showMessageDialog(this, "Resultats guardats correctament!");
             } else {
-                JOptionPane.showMessageDialog(this, "Error guardant els resultats", 
-                                             "Error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Error guardant els resultats",
+                    "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
 
-    //Afegeix un resultat a la taula.
+    // MILLORA: afegim columna de risc a la taula
     public synchronized void afegirResultat(ResultatHost host) {
         resultats.add(host);
-        modelTaula.addRow(new Object[] {
+        hostsEscanejats++;
+
+        // Calcul simple de risc per mostrar a la taula
+        String risc = calcularRiscTaula(host);
+
+        modelTaula.addRow(new Object[]{
             host.getIp(),
             "[" + host.getEstat() + "]",
-            host.getPortsOberts().toString()
+            host.getPortsOberts().toString(),
+            risc
         });
+
+        lblProgress.setText("Hosts trobats: " + hostsEscanejats);
     }
-    
-    //Permet establir la IP inicial des de fora (per autodeteccio).
-    public void setIpInici(String ip) {
-        txtIpInici.setText(ip);
+
+    private String calcularRiscTaula(ResultatHost host) {
+        List<Integer> ports = host.getPortsOberts();
+        if (ports.isEmpty()) return "BAIX";
+        boolean altRisc = ports.contains(23) || ports.contains(445)
+                       || ports.contains(3389) || ports.contains(21);
+        boolean mitjaRisc = ports.contains(22) || ports.contains(3306)
+                         || ports.contains(5432);
+        if (altRisc) return "CRÍTIC";
+        if (mitjaRisc) return "MITJÀ";
+        return "BAIX";
     }
-    
-    //Permet establir la IP final des de fora.
-    public void setIpFi(String ip) {
-        txtIpFi.setText(ip);
+
+    // FIX: validació d'IP real amb regex
+    private boolean ipValida(String ip) {
+        if (ip == null || ip.isEmpty()) return false;
+        String regex = "^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$";
+        return ip.matches(regex);
     }
-    
-    //Retorna el controlador per si MainFrame el necessita.
-    public ScanController getController() {
-        return controller;
-    }
-    
-    //Retorna la llista de resultats.
-    public List<ResultatHost> getResultats() {
-        return resultats;
-    }
+
+    public void setIpInici(String ip) { txtIpInici.setText(ip); }
+    public void setIpFi(String ip)    { txtIpFi.setText(ip); }
+
+    public ScanController getController() { return controller; }
+    public List<ResultatHost> getResultats() { return resultats; }
 }

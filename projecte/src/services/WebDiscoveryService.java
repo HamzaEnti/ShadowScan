@@ -5,12 +5,13 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-
+import java.util.concurrent.TimeUnit;
 
 public class WebDiscoveryService extends AbstractScanService {
-    
+
     private List<String> foundUrls;
     private String customDictionaryPath;
 
@@ -20,27 +21,25 @@ public class WebDiscoveryService extends AbstractScanService {
         this.customDictionaryPath = null;
     }
 
-    // comprova si dirb esta instalat
+    // FIX: tancam el procés, igual que WebDiscoveryService tenia el mateix problema de zombie que Hydra
     @Override
     public boolean checkInstalled() {
         try {
-            ProcessBuilder pb = new ProcessBuilder("dirb", "-h");
-            pb.start();
+            Process p = new ProcessBuilder("dirb").start();
+            p.waitFor(5, TimeUnit.SECONDS);
+            if (p.isAlive()) p.destroy();
             return true;
         } catch (Exception e) {
             return false;
         }
     }
-    
-    // implementacio de la interficie
-    // construim la URL i cridem al metode principal
+
     @Override
     public void executar(String target, int port) {
         String url = "http://" + target + ":" + port + "/";
         discoverWebPaths(url);
     }
 
-    // carrega un diccionari personalitzat
     public void loadCustomDictionary(File dictionaryFile) {
         if (dictionaryFile != null && dictionaryFile.exists()) {
             this.customDictionaryPath = dictionaryFile.getAbsolutePath();
@@ -48,7 +47,6 @@ public class WebDiscoveryService extends AbstractScanService {
         }
     }
 
-    // sobrecarrega per passar IP i port directament
     public void discoverWebPaths(String targetIp, int port, String wordlistPath) {
         if (wordlistPath != null) {
             this.customDictionaryPath = wordlistPath;
@@ -57,26 +55,19 @@ public class WebDiscoveryService extends AbstractScanService {
         discoverWebPaths(url);
     }
 
-    // metode principal d'escaneig
     public void discoverWebPaths(String baseUrl) {
         log("Iniciant escaneig a: " + baseUrl);
         this.foundUrls.clear();
 
         try {
-            // construim la comanda
             List<String> command = new ArrayList<>();
             command.add("dirb");
             command.add(baseUrl);
 
-            // si tenim diccionari custom, l'afegim
             if (customDictionaryPath != null) {
                 command.add(customDictionaryPath);
             }
 
-            // opcions de dirb:
-            // -r = no recursiu (mes rapid)
-            // -S = mode silencis (menys soroll)
-            // -N 404 = ignora respostes 404
             command.add("-r");
             command.add("-S");
             command.add("-N");
@@ -93,49 +84,50 @@ public class WebDiscoveryService extends AbstractScanService {
 
             while ((line = reader.readLine()) != null) {
                 System.out.println("[DIRB] " + line);
-
-                // guardem nomes els exits (codi 200, directoris, etc)
-                if (line.contains("CODE:200") || 
-                    line.contains("DIRECTORY") || 
+                if (line.contains("CODE:200") ||
+                    line.contains("DIRECTORY") ||
                     line.contains("+")) {
                     foundUrls.add(line);
                 }
             }
 
-            int exitCode = process.waitFor();
-            log("Finalitzat (Codi: " + exitCode + ")");
+            // FIX: timeout de 10 minuts
+            boolean finished = process.waitFor(10, TimeUnit.MINUTES);
+            if (!finished) {
+                process.destroy();
+                logError("Dirb timeout (10 min) — procés aturat.");
+            } else {
+                log("Finalitzat (Codi: " + process.exitValue() + ")");
+            }
 
         } catch (Exception e) {
             logError("Dirb fallit: " + e.getMessage());
         }
     }
-    
-    // retorna la llista de URLs trobades
+
     public List<String> getFoundUrls() {
-        return new ArrayList<>(foundUrls); // retornem copia per seguretat
+        return new ArrayList<>(foundUrls);
     }
 
-    // exporta resultats a CSV
+    // FIX: LocalDateTime en comptes de java.util.Date (deprecated)
     public boolean exportReportToCSV(File file) {
         if (foundUrls.isEmpty()) {
             log("No hi ha resultats per exportar.");
             return false;
         }
-        
+
         try (FileWriter writer = new FileWriter(file)) {
-            // capcalera del CSV
-            writer.write("URL,DATA\n");
-            
-            // cada resultat en una linia
+            writer.write("URL,TIMESTAMP\n");
+            String timestamp = LocalDateTime.now().toString();
+
             for (String s : foundUrls) {
-                // escapem les cometes per si de cas
                 String escaped = s.replace("\"", "\"\"");
-                writer.write("\"" + escaped + "\",\"" + new java.util.Date() + "\"\n");
+                writer.write("\"" + escaped + "\",\"" + timestamp + "\"\n");
             }
-            
+
             log("CSV Exportat: " + file.getAbsolutePath());
             return true;
-            
+
         } catch (IOException e) {
             logError("Error exportant CSV: " + e.getMessage());
             return false;

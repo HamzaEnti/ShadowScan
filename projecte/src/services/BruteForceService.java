@@ -5,12 +5,13 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-
+import java.util.concurrent.TimeUnit;
 
 public class BruteForceService extends AbstractScanService {
-    
+
     private String rutaUsuaris;
     private String rutaPasswords;
     private List<String> resultats;
@@ -20,16 +21,21 @@ public class BruteForceService extends AbstractScanService {
         this.resultats = new ArrayList<>();
     }
 
+    // FIX: ara sí llegim el codi de sortida i tanquem el procés
+    // Abans: new ProcessBuilder("hydra", "-h").start() → procés zombie, mai esperat
     @Override
     public boolean checkInstalled() {
         try {
-            new ProcessBuilder("hydra", "-h").start();
+            Process p = new ProcessBuilder("hydra", "-h").start();
+            // hydra -h retorna codi 255 (ajuda), no 0 → qualsevol codi != excepció = instalat
+            p.waitFor(5, TimeUnit.SECONDS);
+            if (p.isAlive()) p.destroy();
             return true;
         } catch (Exception e) {
             return false;
         }
     }
-    
+
     @Override
     public void executar(String target, int port) {
         if (rutaUsuaris == null || rutaPasswords == null) {
@@ -39,7 +45,7 @@ public class BruteForceService extends AbstractScanService {
         }
         atacar(target, port, rutaUsuaris, rutaPasswords);
     }
-    
+
     public void setDiccionaris(String users, String pass) {
         this.rutaUsuaris = users;
         this.rutaPasswords = pass;
@@ -56,12 +62,11 @@ public class BruteForceService extends AbstractScanService {
         }
 
         String protocol = determinarProtocol(port);
-        resultats.clear(); // netegem resultats anteriors
+        resultats.clear();
 
-        // Part feta amb IA
         log("Iniciant atac a " + ip + " pel port " + port + " (" + protocol + ")...");
         log("Diccionaris carregats. Aixo pot tardar una estona.");
-        
+
         try {
             ProcessBuilder pb = new ProcessBuilder(
                 "hydra",
@@ -83,18 +88,23 @@ public class BruteForceService extends AbstractScanService {
 
             while ((line = reader.readLine()) != null) {
                 System.out.println("[HYDRA] " + line);
-                resultats.add(line); // guardem cada linia
+                resultats.add(line);
             }
 
-            p.waitFor();
-            log("Atac finalitzat.");
+            // FIX: timeout de 10 minuts, no esperem indefinidament
+            boolean finished = p.waitFor(10, TimeUnit.MINUTES);
+            if (!finished) {
+                p.destroy();
+                logError("Hydra timeout (10 min) — procés aturat.");
+            } else {
+                log("Atac finalitzat.");
+            }
 
         } catch (Exception e) {
             logError("Hydra error: " + e.getMessage());
         }
     }
-    // Fi part feta amb IA
-    
+
     private String determinarProtocol(int port) {
         switch (port) {
             case 21:   return "ftp";
@@ -108,32 +118,32 @@ public class BruteForceService extends AbstractScanService {
             default:   return "ssh";
         }
     }
-    
-    // retorna els resultats guardats
+
     public List<String> getResultats() {
         return new ArrayList<>(resultats);
     }
-    
-    // exporta resultats a CSV
+
+    // FIX: LocalDateTime en comptes de new java.util.Date() (deprecated des de Java 8)
     public boolean exportToCSV(File file) {
         if (resultats.isEmpty()) {
             log("No hi ha resultats per exportar.");
             return false;
         }
-        
+
         try (FileWriter writer = new FileWriter(file)) {
-            writer.write("LINIA,CONTINGUT,DATA\n");
-            
+            writer.write("LINIA,CONTINGUT,TIMESTAMP\n");
+            String timestamp = LocalDateTime.now().toString();
+
             int numLinia = 1;
             for (String s : resultats) {
                 String escaped = s.replace("\"", "\"\"");
-                writer.write(numLinia + ",\"" + escaped + "\",\"" + new java.util.Date() + "\"\n");
+                writer.write(numLinia + ",\"" + escaped + "\",\"" + timestamp + "\"\n");
                 numLinia++;
             }
-            
+
             log("CSV Exportat: " + file.getAbsolutePath());
             return true;
-            
+
         } catch (IOException e) {
             logError("Error exportant CSV: " + e.getMessage());
             return false;

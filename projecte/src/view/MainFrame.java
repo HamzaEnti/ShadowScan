@@ -7,153 +7,233 @@ import javax.swing.*;
 import javax.swing.plaf.basic.BasicTabbedPaneUI;
 import model.ResultatHost;
 
-//Finestra principal de l'aplicacio.
 public class MainFrame extends JFrame {
-    
 
-    // el tabbed pane que conte les pestanyes
     private JTabbedPane tabbedPane;
-    
-    // els tres panels principals
     private DiscoveryPanel discoveryPanel;
     private NmapPanel nmapPanel;
     private SecurityPanel securityPanel;
-    
-    // area de text per als logs
     private JTextArea txtConsole;
-    
-    // botons del menu lateral
+
     private JButton btnNavDiscovery;
     private JButton btnNavNmap;
     private JButton btnNavSecurity;
 
+    // Colors del tema fosc per al menú lateral
+    // Assisted by Claude (Anthropic) — dark sidebar design
+    private static final Color SIDEBAR_BG      = new Color(28, 32, 40);
+    private static final Color SIDEBAR_BTN_BG  = new Color(40, 46, 58);
+    private static final Color SIDEBAR_BTN_HOV = new Color(55, 65, 85);
+    private static final Color SIDEBAR_BTN_SEL = new Color(59, 130, 246);
+    private static final Color SIDEBAR_TEXT    = new Color(200, 210, 230);
+    private static final Color SIDEBAR_TITLE   = new Color(100, 130, 200);
+
     public MainFrame() {
-        // configuracio basica de la finestra
         configurarFinestra();
-        
-        // construim la UI
         initConsole();
         initPantalla();
         configurarLogs();
-        
-        // inicialitzacions automatiques
         autoDetectarIp();
         checkDependenciesAsync();
-        
-        System.out.println(">>> [INIT] Aplicacio iniciada correctament");
+
+        System.out.println(">>> [INIT] ShadowScan iniciada correctament.");
     }
-    
+
     private void configurarFinestra() {
-        this.setTitle("ShadowScan - Network Security Toolkit");
-        this.setSize(1100, 750);
+        this.setTitle("ShadowScan v1.1 — Network Security Toolkit");
+        this.setSize(1200, 800);
+        this.setMinimumSize(new Dimension(900, 600));
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         this.setLayout(new BorderLayout());
-        this.setLocationRelativeTo(null); // centra la finestra
+        this.setLocationRelativeTo(null);
+
+        // MILLORA: icona a la barra de títol (si existeix)
+        try {
+            ImageIcon icon = new ImageIcon(getClass().getResource("/icon.png"));
+            this.setIconImage(icon.getImage());
+        } catch (Exception ignored) {}
     }
 
-    // INICIALITZACIO DE LA UI
     private void initPantalla() {
-        // creem el tabbed pane amb els tabs ocults
-        // (navegarem amb el menu lateral)
         tabbedPane = new JTabbedPane();
+        // Tabs ocults — la navegació és pel menú lateral
         tabbedPane.setUI(new BasicTabbedPaneUI() {
             @Override
-            protected int calculateTabAreaHeight(int tabPlacement, int horizRunCount, int maxTabHeight) {
-                return 0;
-            }
+            protected int calculateTabAreaHeight(int p, int h, int m) { return 0; }
         });
 
-        // creem els panels
         discoveryPanel = new DiscoveryPanel(this);
-        nmapPanel = new NmapPanel(this);
-        securityPanel = new SecurityPanel(this);
+        nmapPanel      = new NmapPanel(this);
+        securityPanel  = new SecurityPanel(this);
 
-        // els afegim al tabbed pane
         tabbedPane.addTab("Discovery", discoveryPanel);
-        tabbedPane.addTab("Nmap", nmapPanel);
-        tabbedPane.addTab("Security", securityPanel);
+        tabbedPane.addTab("Nmap",      nmapPanel);
+        tabbedPane.addTab("Security",  securityPanel);
 
         this.add(tabbedPane, BorderLayout.CENTER);
-        
-        // creem el menu lateral
         crearMenuLateral();
     }
-    
-    //He fet aquest metode amb l'ajuda d'IA.
+
+    // MILLORA: menú lateral fosc professional
     private void crearMenuLateral() {
-        JPanel panelDreta = new JPanel();
-        panelDreta.setLayout(new BoxLayout(panelDreta, BoxLayout.Y_AXIS));
-        panelDreta.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, Color.LIGHT_GRAY));
-        panelDreta.setPreferredSize(new Dimension(220, 0));
-        panelDreta.setBackground(new Color(245, 245, 245));
+        JPanel sidebar = new JPanel();
+        sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
+        sidebar.setPreferredSize(new Dimension(200, 0));
+        sidebar.setBackground(SIDEBAR_BG);
 
-        // titol del menu
-        JLabel lblMenu = new JLabel("MAIN MENU");
-        lblMenu.setFont(new Font("Arial", Font.BOLD, 14));
-        lblMenu.setAlignmentX(Component.CENTER_ALIGNMENT);
+        // Logo / títol
+        JLabel lblLogo = new JLabel("SHADOW");
+        lblLogo.setFont(new Font("Arial", Font.BOLD, 20));
+        lblLogo.setForeground(Color.WHITE);
+        lblLogo.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // botons de navegacio
-        btnNavDiscovery = crearBotoMenu("1. NETWORK SCAN");
-        btnNavNmap = crearBotoMenu("2. NMAP ANALYZER");
-        btnNavSecurity = crearBotoMenu("3. SECURITY TOOLS");
+        JLabel lblLogoSub = new JLabel("SCAN");
+        lblLogoSub.setFont(new Font("Arial", Font.BOLD, 20));
+        lblLogoSub.setForeground(SIDEBAR_TITLE);
+        lblLogoSub.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // afegim amb espais
-        panelDreta.add(Box.createVerticalStrut(20));
-        panelDreta.add(lblMenu);
-        panelDreta.add(Box.createVerticalStrut(20));
-        panelDreta.add(btnNavDiscovery);
-        panelDreta.add(Box.createVerticalStrut(15));
-        panelDreta.add(btnNavNmap);
-        panelDreta.add(Box.createVerticalStrut(15));
-        panelDreta.add(btnNavSecurity);
-        panelDreta.add(Box.createVerticalGlue());
+        JSeparator sep = new JSeparator();
+        sep.setForeground(new Color(50, 60, 80));
+        sep.setMaximumSize(new Dimension(180, 1));
 
-        // listeners - canvien de pestanya
-        btnNavDiscovery.addActionListener(e -> tabbedPane.setSelectedIndex(0));
-        btnNavNmap.addActionListener(e -> tabbedPane.setSelectedIndex(1));
-        btnNavSecurity.addActionListener(e -> tabbedPane.setSelectedIndex(2));
+        JLabel lblSection = new JLabel("MODULES");
+        lblSection.setFont(new Font("Segoe UI", Font.BOLD, 10));
+        lblSection.setForeground(new Color(90, 110, 150));
+        lblSection.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        this.add(panelDreta, BorderLayout.EAST);
+        btnNavDiscovery = crearBotoSidebar("  Network Scan", "1");
+        btnNavNmap      = crearBotoSidebar("  Nmap Analyzer", "2");
+        btnNavSecurity  = crearBotoSidebar("  Security Tools", "3");
+
+        // selecció inicial
+        marcarBotoSeleccionat(btnNavDiscovery);
+
+        sidebar.add(Box.createVerticalStrut(24));
+        sidebar.add(lblLogo);
+        sidebar.add(lblLogoSub);
+        sidebar.add(Box.createVerticalStrut(16));
+        sidebar.add(sep);
+        sidebar.add(Box.createVerticalStrut(12));
+        sidebar.add(lblSection);
+        sidebar.add(Box.createVerticalStrut(10));
+        sidebar.add(btnNavDiscovery);
+        sidebar.add(Box.createVerticalStrut(6));
+        sidebar.add(btnNavNmap);
+        sidebar.add(Box.createVerticalStrut(6));
+        sidebar.add(btnNavSecurity);
+        sidebar.add(Box.createVerticalGlue());
+
+        // versió al peu del sidebar
+        JLabel lblVer = new JLabel("v1.1.0");
+        lblVer.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        lblVer.setForeground(new Color(70, 85, 110));
+        lblVer.setAlignmentX(Component.CENTER_ALIGNMENT);
+        sidebar.add(lblVer);
+        sidebar.add(Box.createVerticalStrut(12));
+
+        // listeners
+        btnNavDiscovery.addActionListener(e -> {
+            tabbedPane.setSelectedIndex(0);
+            marcarBotoSeleccionat(btnNavDiscovery);
+            desmarcarBotons(btnNavNmap, btnNavSecurity);
+        });
+        btnNavNmap.addActionListener(e -> {
+            tabbedPane.setSelectedIndex(1);
+            marcarBotoSeleccionat(btnNavNmap);
+            desmarcarBotons(btnNavDiscovery, btnNavSecurity);
+        });
+        btnNavSecurity.addActionListener(e -> {
+            tabbedPane.setSelectedIndex(2);
+            marcarBotoSeleccionat(btnNavSecurity);
+            desmarcarBotons(btnNavDiscovery, btnNavNmap);
+        });
+
+        this.add(sidebar, BorderLayout.WEST);
     }
-    
-    private JButton crearBotoMenu(String text) {
+
+    private JButton crearBotoSidebar(String text, String num) {
         JButton btn = new JButton(text);
-        btn.setMaximumSize(new Dimension(190, 45));
-        btn.setPreferredSize(new Dimension(190, 45));
+        btn.setMaximumSize(new Dimension(185, 42));
+        btn.setPreferredSize(new Dimension(185, 42));
         btn.setAlignmentX(Component.CENTER_ALIGNMENT);
         btn.setFocusPainted(false);
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        btn.setBackground(Color.WHITE);
-        
-        // efecte hover
+        btn.setBorderPainted(false);
+        btn.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        btn.setBackground(SIDEBAR_BTN_BG);
+        btn.setForeground(SIDEBAR_TEXT);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.setHorizontalAlignment(SwingConstants.LEFT);
+
         btn.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                btn.setBackground(new Color(220, 230, 255));
+            public void mouseEntered(java.awt.event.MouseEvent e) {
+                if (btn.getBackground() != SIDEBAR_BTN_SEL) {
+                    btn.setBackground(SIDEBAR_BTN_HOV);
+                }
             }
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                btn.setBackground(Color.WHITE);
+            public void mouseExited(java.awt.event.MouseEvent e) {
+                if (btn.getBackground() != SIDEBAR_BTN_SEL) {
+                    btn.setBackground(SIDEBAR_BTN_BG);
+                }
             }
         });
-        
+
         return btn;
     }
 
-    // Aquí la consola de logs
+    private void marcarBotoSeleccionat(JButton btn) {
+        btn.setBackground(SIDEBAR_BTN_SEL);
+        btn.setForeground(Color.WHITE);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
+    }
+
+    private void desmarcarBotons(JButton... botons) {
+        for (JButton b : botons) {
+            b.setBackground(SIDEBAR_BTN_BG);
+            b.setForeground(SIDEBAR_TEXT);
+            b.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        }
+    }
+
+    // MILLORA: consola amb altura reduïda i botó de clear
     private void initConsole() {
-        txtConsole = new JTextArea(10, 50);
-        txtConsole.setBackground(Color.BLACK);
-        txtConsole.setForeground(new Color(50, 205, 50));
+        txtConsole = new JTextArea(7, 0);
+        txtConsole.setBackground(new Color(18, 20, 26));
+        txtConsole.setForeground(new Color(80, 220, 100));
+        txtConsole.setCaretColor(new Color(80, 220, 100));
         txtConsole.setFont(new Font("Consolas", Font.PLAIN, 12));
         txtConsole.setEditable(false);
-        
+        txtConsole.setMargin(new Insets(6, 8, 6, 8));
+
         JScrollPane scroll = new JScrollPane(txtConsole);
-        scroll.setBorder(BorderFactory.createTitledBorder("Logs del Sistema"));
-        
-        this.add(scroll, BorderLayout.SOUTH);
+        scroll.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(50, 60, 80)));
+
+        // MILLORA: panel inferior amb títol i botó clear
+        JPanel pnlConsola = new JPanel(new BorderLayout());
+        pnlConsola.setBackground(new Color(22, 26, 34));
+
+        JPanel pnlConsolaHeader = new JPanel(new BorderLayout());
+        pnlConsolaHeader.setBackground(new Color(22, 26, 34));
+        pnlConsolaHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+
+        JLabel lblConsola = new JLabel("CONSOLA DE LOGS");
+        lblConsola.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        lblConsola.setForeground(new Color(90, 110, 150));
+
+        JButton btnClear = new JButton("Netejar");
+        btnClear.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        btnClear.setFocusPainted(false);
+        btnClear.addActionListener(e -> txtConsole.setText(""));
+
+        pnlConsolaHeader.add(lblConsola, BorderLayout.WEST);
+        pnlConsolaHeader.add(btnClear, BorderLayout.EAST);
+
+        pnlConsola.add(pnlConsolaHeader, BorderLayout.NORTH);
+        pnlConsola.add(scroll, BorderLayout.CENTER);
+
+        this.add(pnlConsola, BorderLayout.SOUTH);
     }
 
     private void configurarLogs() {
-        // redirigim System.out i System.err cap al JTextArea
         ConsoleRedirector redirector = new ConsoleRedirector(txtConsole);
         PrintStream outStream = new PrintStream(redirector);
         System.setOut(outStream);
@@ -164,50 +244,32 @@ public class MainFrame extends JFrame {
         try {
             String myIp = InetAddress.getLocalHost().getHostAddress();
             String prefix = myIp.substring(0, myIp.lastIndexOf(".") + 1);
-            
-            // passem la IP als panels
             discoveryPanel.setIpInici(myIp);
             discoveryPanel.setIpFi(prefix + "254");
             nmapPanel.setIp(myIp);
             securityPanel.setTargetIp(myIp);
-            
             System.out.println(">>> [INIT] IP Local detectada: " + myIp);
         } catch (Exception e) {
-            System.err.println(">>> [ERROR] No s'ha pogut detectar IP.");
+            System.err.println(">>> [ERROR] No s'ha pogut detectar la IP local.");
         }
     }
 
     private void checkDependenciesAsync() {
         new Thread(() -> {
             System.out.println(">>> [BOOT] Verificant eines externes...");
-            
-            // cada panel verifica les seves dependencies
             SwingUtilities.invokeLater(() -> {
                 nmapPanel.verificarInstalacio();
                 securityPanel.verificarInstalacions();
-                System.out.println(">>> [BOOT] Verificacio completada.");
+                System.out.println(">>> [BOOT] Verificació completada.");
             });
         }).start();
     }
 
-    //Afegeix un resultat d'escaneig. Aquest metode el crida ScanTask quan troba un host.
     public synchronized void afegirResultat(ResultatHost host) {
         discoveryPanel.afegirResultat(host);
     }
-    
-    //Retorna el panel de Discovery.
-    public DiscoveryPanel getDiscoveryPanel() {
-        return discoveryPanel;
-    }
-    
-    //Retorna el panel de Nmap.
 
-    public NmapPanel getNmapPanel() {
-        return nmapPanel;
-    }
-    
-    //Retorna el panel de Security.
-    public SecurityPanel getSecurityPanel() {
-        return securityPanel;
-    }
+    public DiscoveryPanel getDiscoveryPanel() { return discoveryPanel; }
+    public NmapPanel getNmapPanel()           { return nmapPanel; }
+    public SecurityPanel getSecurityPanel()   { return securityPanel; }
 }

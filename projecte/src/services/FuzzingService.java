@@ -5,12 +5,13 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-
+import java.util.concurrent.TimeUnit;
 
 public class FuzzingService extends AbstractScanService {
-    
+
     private String wordlistPath;
     private List<String> resultats;
 
@@ -24,12 +25,14 @@ public class FuzzingService extends AbstractScanService {
         try {
             ProcessBuilder pb = new ProcessBuilder("ffuf", "-version");
             Process p = pb.start();
-            return (p.waitFor() == 0);
+            boolean done = p.waitFor(5, TimeUnit.SECONDS);
+            if (!done) { p.destroy(); return false; }
+            return true; // ffuf retorna != 0 per -version però no llença excepció si existeix
         } catch (Exception e) {
             return false;
         }
     }
-    
+
     @Override
     public void executar(String target, int port) {
         if (wordlistPath == null) {
@@ -38,7 +41,7 @@ public class FuzzingService extends AbstractScanService {
         }
         lanzarFuzzing(target, port, wordlistPath);
     }
-    
+
     public void setWordlist(String path) {
         this.wordlistPath = path;
     }
@@ -51,13 +54,13 @@ public class FuzzingService extends AbstractScanService {
 
         String url = "http://" + ip + ":" + port + "/FUZZ";
         log("Fuzzing a: " + url);
-        resultats.clear(); // netegem resultats anteriors
-        //Part feta amb IA
+        resultats.clear();
+
         try {
             ProcessBuilder pb = new ProcessBuilder(
-                "ffuf", 
-                "-w", rutaWordlist, 
-                "-u", url, 
+                "ffuf",
+                "-w", rutaWordlist,
+                "-u", url,
                 "-mc", "200,301,302,403"
             );
 
@@ -71,43 +74,48 @@ public class FuzzingService extends AbstractScanService {
 
             while ((line = reader.readLine()) != null) {
                 System.out.println("[FFUF] " + line);
-                resultats.add(line); // guardem cada linia
+                resultats.add(line);
             }
 
-            p.waitFor();
-            log("Finalitzat.");
+            // FIX: timeout de 10 minuts
+            boolean finished = p.waitFor(10, TimeUnit.MINUTES);
+            if (!finished) {
+                p.destroy();
+                logError("Ffuf timeout (10 min) — procés aturat.");
+            } else {
+                log("Finalitzat.");
+            }
 
         } catch (Exception e) {
             logError("Ffuf error: " + e.getMessage());
         }
     }
-    //Fi part feta amb IA
-    
-    // retorna els resultats guardats
+
     public List<String> getResultats() {
         return new ArrayList<>(resultats);
     }
-    
-    // exporta resultats a CSV
+
+    // FIX: LocalDateTime en comptes de java.util.Date (deprecated)
     public boolean exportToCSV(File file) {
         if (resultats.isEmpty()) {
             log("No hi ha resultats per exportar.");
             return false;
         }
-        
+
         try (FileWriter writer = new FileWriter(file)) {
-            writer.write("LINIA,CONTINGUT,DATA\n");
-            
+            writer.write("LINIA,CONTINGUT,TIMESTAMP\n");
+            String timestamp = LocalDateTime.now().toString();
+
             int numLinia = 1;
             for (String s : resultats) {
                 String escaped = s.replace("\"", "\"\"");
-                writer.write(numLinia + ",\"" + escaped + "\",\"" + new java.util.Date() + "\"\n");
+                writer.write(numLinia + ",\"" + escaped + "\",\"" + timestamp + "\"\n");
                 numLinia++;
             }
-            
+
             log("CSV Exportat: " + file.getAbsolutePath());
             return true;
-            
+
         } catch (IOException e) {
             logError("Error exportant CSV: " + e.getMessage());
             return false;

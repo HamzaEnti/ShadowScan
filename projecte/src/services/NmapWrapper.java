@@ -5,13 +5,13 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-
+import java.util.concurrent.TimeUnit;
 
 public class NmapWrapper extends AbstractScanService {
 
-    // llista on guardem les linies de sortida per poder exportar
     private List<String> resultats;
 
     public NmapWrapper() {
@@ -24,8 +24,9 @@ public class NmapWrapper extends AbstractScanService {
         try {
             ProcessBuilder pb = new ProcessBuilder("nmap", "--version");
             Process p = pb.start();
-            int exitCode = p.waitFor();
-            return (exitCode == 0);
+            boolean done = p.waitFor(5, TimeUnit.SECONDS);
+            if (!done) { p.destroy(); return false; }
+            return (p.exitValue() == 0);
         } catch (Exception e) {
             return false;
         }
@@ -35,11 +36,11 @@ public class NmapWrapper extends AbstractScanService {
     public void executar(String ip, int port) {
         escanearConNmap(ip);
     }
-    
+
     public void escanearConNmap(String ip) {
         log("Llancant comanda contra: " + ip);
-        resultats.clear(); // netegem resultats anteriors
-        //Part feta amb IA
+        resultats.clear();
+
         try {
             ProcessBuilder pb = new ProcessBuilder("nmap", "-sV", "-T4", ip);
             pb.redirectErrorStream(true);
@@ -53,48 +54,50 @@ public class NmapWrapper extends AbstractScanService {
 
             while ((line = reader.readLine()) != null) {
                 System.out.println(line);
-                resultats.add(line); // guardem cada linia
+                resultats.add(line);
             }
 
-            int exitCode = process.waitFor();
-
-            if (exitCode == 0) {
+            // FIX: timeout de 5 minuts per evitar processos bloquejats indefinidament
+            boolean finished = process.waitFor(5, TimeUnit.MINUTES);
+            if (!finished) {
+                process.destroy();
+                logError("Nmap timeout (5 min) — procés aturat.");
+            } else if (process.exitValue() == 0) {
                 log("Escaneig finalitzat amb exit.");
             } else {
-                logError("Ha acabat amb errors (Codi: " + exitCode + ")");
+                logError("Ha acabat amb errors (Codi: " + process.exitValue() + ")");
             }
 
         } catch (Exception e) {
             logError("Fallada executant Nmap: " + e.getMessage());
-            e.printStackTrace();
         }
-    }//Fi part feta amb IA
-    
-    // retorna els resultats guardats
+    }
+
     public List<String> getResultats() {
         return new ArrayList<>(resultats);
     }
-    
-    // exporta resultats a CSV
+
+    // FIX: LocalDateTime en comptes de new java.util.Date() (deprecated des de Java 8)
     public boolean exportToCSV(File file) {
         if (resultats.isEmpty()) {
             log("No hi ha resultats per exportar.");
             return false;
         }
-        
+
         try (FileWriter writer = new FileWriter(file)) {
-            writer.write("LINIA,CONTINGUT,DATA\n");
-            
+            writer.write("LINIA,CONTINGUT,TIMESTAMP\n");
+            String timestamp = LocalDateTime.now().toString();
+
             int numLinia = 1;
             for (String s : resultats) {
                 String escaped = s.replace("\"", "\"\"");
-                writer.write(numLinia + ",\"" + escaped + "\",\"" + new java.util.Date() + "\"\n");
+                writer.write(numLinia + ",\"" + escaped + "\",\"" + timestamp + "\"\n");
                 numLinia++;
             }
-            
+
             log("CSV Exportat: " + file.getAbsolutePath());
             return true;
-            
+
         } catch (IOException e) {
             logError("Error exportant CSV: " + e.getMessage());
             return false;

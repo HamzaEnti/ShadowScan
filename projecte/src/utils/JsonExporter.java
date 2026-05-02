@@ -28,6 +28,8 @@ import model.ResultatHost;
  *   "entry_point": "192.168.1.1",
  *   "target": null
  * }
+ *
+ * Assisted by Claude (Anthropic) — topology format design for RedTrace integration.
  */
 public class JsonExporter {
 
