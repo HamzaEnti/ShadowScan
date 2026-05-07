@@ -1,73 +1,136 @@
 package utils;
 
-import java.io.FileWriter;
+import java.io.BufferedWriter;
 import java.io.IOException;
-import java.time.LocalDateTime;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
 import model.ResultatHost;
 
 /**
  * Exportador JSON per a ShadowScan.
  *
  * Genera dos formats:
- *   - saveToJSON()         → array simple de hosts (format original)
- *   - saveToTopology()     → format topology.json per a RedTrace
+ *   - saveToJSON() / saveToJSONPretty() → array simple de hosts (compatible)
+ *   - saveToTopology()                  → format topology.json per a RedTrace
  *
- * El format topology.json inclou nodes, arestes calculades automàticament
- * i pesos basats en els ports oberts de cada host.
+ * Versió blindada: locale invariant per als floats, UTF-8 explícit, escape
+ * complet de control chars, validació de paths/IPs, lookup O(1) de ports,
+ * creació automàtica de directoris i timestamps UTC.
  *
- * Integració RedTrace — estructura generada:
- * {
- *   "metadata": { "generated_by": "ShadowScan", "timestamp": "..." },
- *   "nodes": [
- *     { "id": "192.168.1.1", "type": "host", "ports": [22,80], "risk": 0.6 }
- *   ],
- *   "edges": [
- *     { "from": "192.168.1.1", "to": "192.168.1.10", "weight": 0.4 }
- *   ],
- *   "entry_point": "192.168.1.1",
- *   "target": null
- * }
- *
- * Assisted by Claude (Anthropic) — topology format design for RedTrace integration.
  */
 public class JsonExporter {
 
-    // ─── Mapa de serveis per port ────────────────────────────────────────────
-    // Permet identificar el servei associat a cada port obert
-    // i calcular el pes d'explotació corresponent per a RedTrace.
-    private static final int[] HIGH_RISK_PORTS   = {21, 23, 445, 3389, 5900};  // FTP, Telnet, SMB, RDP, VNC
-    private static final int[] MEDIUM_RISK_PORTS = {22, 3306, 5432, 1433, 6379}; // SSH, MySQL, Postgres, MSSQL, Redis
-    private static final int[] LOW_RISK_PORTS    = {80, 443, 8080, 8443};       // HTTP/HTTPS
+    /* ─── Configuració ──────────────────────────────────────────────────── */
 
-    // ─── Format original (array simple) ─────────────────────────────────────
+    /**
+     * Locale invariant per a tots els floats.
+     * IMPORTANT: NO canviar a Locale.getDefault(). Si el sistema està en
+     * català/castellà, "%.2f" emetria "0,12" en lloc de "0.12" i el JSON
+     * resultant seria invàlid (json.loads de Python falla amb JSONDecodeError).
+     */
+    private static final Locale JSON_LOCALE = Locale.ROOT;
+
+    /* ─── Categories de ports per al càlcul de risc ─────────────────────── */
+
+    private static final Set<Integer> HIGH_RISK_PORTS = Set.of(
+        21,    // FTP (clear-text)
+        23,    // Telnet (clear-text)
+        135,   // RPC endpoint mapper
+        137,   // NetBIOS Name Service
+        138,   // NetBIOS Datagram Service
+        139,   // NetBIOS Session Service
+        445,   // SMB
+        3389,  // RDP
+        5900   // VNC
+    );
+
+    private static final Set<Integer> MEDIUM_RISK_PORTS = Set.of(
+        22,    // SSH
+        25,    // SMTP
+        110,   // POP3
+        143,   // IMAP
+        1433,  // MSSQL
+        3306,  // MySQL
+        5432,  // PostgreSQL
+        6379,  // Redis
+        27017  // MongoDB
+    );
+
+    private static final Set<Integer> LOW_RISK_PORTS = Set.of(
+        53,    // DNS
+        80,    // HTTP
+        443,   // HTTPS
+        8080,  // HTTP-alt
+        8443   // HTTPS-alt
+    );
+
+    /* ─── Mapatge port → nom de servei ──────────────────────────────────── */
+
+    private static final Map<Integer, String> SERVICE_NAMES = Map.ofEntries(
+        Map.entry(21, "ftp"),
+        Map.entry(22, "ssh"),
+        Map.entry(23, "telnet"),
+        Map.entry(25, "smtp"),
+        Map.entry(53, "dns"),
+        Map.entry(80, "http"),
+        Map.entry(110, "pop3"),
+        Map.entry(135, "rpc"),
+        Map.entry(137, "netbios-ns"),
+        Map.entry(138, "netbios-dgm"),
+        Map.entry(139, "netbios-ssn"),
+        Map.entry(143, "imap"),
+        Map.entry(443, "https"),
+        Map.entry(445, "smb"),
+        Map.entry(1433, "mssql"),
+        Map.entry(3306, "mysql"),
+        Map.entry(3389, "rdp"),
+        Map.entry(5432, "postgres"),
+        Map.entry(5900, "vnc"),
+        Map.entry(6379, "redis"),
+        Map.entry(8080, "http-alt"),
+        Map.entry(8443, "https-alt"),
+        Map.entry(27017, "mongodb")
+    );
+
+    /* ─── Format original (array simple) ────────────────────────────────── */
 
     /**
      * Exporta la llista de hosts al format JSON original de ShadowScan.
-     * Compatible amb versions anteriors.
      */
     public static boolean saveToJSON(List<ResultatHost> resultats, String path) {
         if (resultats == null || resultats.isEmpty()) {
             System.out.println(">>> [EXPORT] No hi ha resultats per exportar");
             return false;
         }
+        if (path == null || path.isBlank()) {
+            System.err.println(">>> [ERROR] Ruta de sortida buida");
+            return false;
+        }
 
-        try (FileWriter writer = new FileWriter(path)) {
-            writer.write("[\n");
-
+        try (Writer w = openWriter(path)) {
+            w.write("[\n");
             for (int i = 0; i < resultats.size(); i++) {
                 ResultatHost h = resultats.get(i);
-                writer.write("  " + h.toJson());
-                if (i < resultats.size() - 1) {
-                    writer.write(",");
-                }
-                writer.write("\n");
+                w.write("  ");
+                w.write(h.toJson());
+                if (i < resultats.size() - 1) w.write(",");
+                w.write("\n");
             }
-
-            writer.write("]");
+            w.write("]\n");
             System.out.println(">>> [EXPORT] JSON guardat a: " + path);
             return true;
-
         } catch (IOException e) {
             System.err.println(">>> [ERROR] No s'ha pogut guardar el JSON: " + e.getMessage());
             return false;
@@ -79,61 +142,63 @@ public class JsonExporter {
      */
     public static boolean saveToJSONPretty(List<ResultatHost> resultats, String path) {
         if (resultats == null || resultats.isEmpty()) {
+            System.out.println(">>> [EXPORT] No hi ha resultats per exportar");
+            return false;
+        }
+        if (path == null || path.isBlank()) {
+            System.err.println(">>> [ERROR] Ruta de sortida buida");
             return false;
         }
 
-        try (FileWriter writer = new FileWriter(path)) {
-            writer.write("[\n");
-
+        try (Writer w = openWriter(path)) {
+            w.write("[\n");
             for (int i = 0; i < resultats.size(); i++) {
                 ResultatHost h = resultats.get(i);
-                writer.write("  {\n");
-                writer.write("    \"ip\": \"" + escapeJson(h.getIp()) + "\",\n");
-                writer.write("    \"esViu\": " + h.isEsViu() + ",\n");
-                writer.write("    \"estat\": \"" + escapeJson(h.getEstat().toString()) + "\",\n");
-                writer.write("    \"ports\": " + toJsonArray(h.getPortsOberts()) + "\n");
-                writer.write("  }");
-
-                if (i < resultats.size() - 1) {
-                    writer.write(",");
-                }
-                writer.write("\n");
+                w.write("  {\n");
+                w.write("    \"ip\": \"" + escapeJson(h.getIp()) + "\",\n");
+                w.write("    \"esViu\": " + h.isEsViu() + ",\n");
+                w.write("    \"estat\": \"" + escapeJson(String.valueOf(h.getEstat())) + "\",\n");
+                w.write("    \"ports\": " + toJsonArray(h.getPortsOberts()) + "\n");
+                w.write("  }");
+                if (i < resultats.size() - 1) w.write(",");
+                w.write("\n");
             }
-
-            writer.write("]\n");
+            w.write("]\n");
             System.out.println(">>> [EXPORT] JSON pretty guardat a: " + path);
             return true;
-
         } catch (IOException e) {
-            // Fix: ara sí logeja l'error en comptes de silenciar-lo
             System.err.println(">>> [ERROR] No s'ha pogut guardar el JSON pretty: " + e.getMessage());
             return false;
         }
     }
 
-    // ─── Format RedTrace (topology.json) ────────────────────────────────────
+    /* ─── Format RedTrace (topology.json) ───────────────────────────────── */
 
     /**
      * Exporta els resultats al format topology.json que espera RedTrace.
      *
-     * Genera automàticament:
-     *   - nodes: un per cada host actiu, amb tipus inferit i risc calculat
-     *   - edges: connexions entre tots els hosts de la mateixa subxarxa
-     *   - weight: pes d'explotació basat en els ports oberts (0.1 = fàcil, 1.0 = difícil)
-     *   - entry_point: primer host trobat (es pot canviar manualment)
-     *
      * @param resultats  llista de hosts escanejats per ShadowScan
-     * @param path       ruta on guardar el fitxer topology.json
-     * @param entryPoint IP del node d'entrada (null = primer host actiu trobat)
-     * @param target     IP del node objectiu (null = últim host actiu trobat)
+     * @param path       ruta on guardar el fitxer (es crearan els directoris pares)
+     * @param entryPoint IP del node d'entrada (null = primer host actiu)
+     * @param target     IP del node objectiu (null = últim host actiu)
      * @return true si s'ha guardat correctament
      */
     public static boolean saveToTopology(List<ResultatHost> resultats, String path,
                                           String entryPoint, String target) {
-        // Filtrem només els hosts actius
-        List<ResultatHost> hostsActius = new java.util.ArrayList<>();
+        if (resultats == null) {
+            System.err.println(">>> [ERROR] Llista de resultats nul·la");
+            return false;
+        }
+        if (path == null || path.isBlank()) {
+            System.err.println(">>> [ERROR] Ruta de sortida buida");
+            return false;
+        }
+
+        // Filtrem hosts actius amb IP vàlida
+        List<ResultatHost> hostsActius = new ArrayList<>();
         for (ResultatHost h : resultats) {
-            if (h.isEsViu()) {
+            if (h != null && h.isEsViu()
+                && h.getIp() != null && !h.getIp().isBlank()) {
                 hostsActius.add(h);
             }
         }
@@ -143,23 +208,41 @@ public class JsonExporter {
             return false;
         }
 
-        // Si no s'especifiquen, usem el primer i l'últim host actiu
-        String entry = (entryPoint != null) ? entryPoint : hostsActius.get(0).getIp();
-        String tgt   = (target != null)     ? target     : hostsActius.get(hostsActius.size() - 1).getIp();
+        // Resolució amb fallbacks
+        String entry = (entryPoint != null && !entryPoint.isBlank())
+            ? entryPoint
+            : hostsActius.get(0).getIp();
+        String tgt = (target != null && !target.isBlank())
+            ? target
+            : hostsActius.get(hostsActius.size() - 1).getIp();
 
-        try (FileWriter w = new FileWriter(path)) {
+        // Validació: entry i target han de ser hosts actius
+        Set<String> ipsActives = new HashSet<>();
+        for (ResultatHost h : hostsActius) ipsActives.add(h.getIp());
+        if (!ipsActives.contains(entry)) {
+            System.err.println(">>> [ERROR] entry_point '" + entry +
+                "' no és cap host actiu de la llista");
+            return false;
+        }
+        if (tgt != null && !ipsActives.contains(tgt)) {
+            System.err.println(">>> [ERROR] target '" + tgt +
+                "' no és cap host actiu de la llista");
+            return false;
+        }
+
+        try (Writer w = openWriter(path)) {
             w.write("{\n");
 
-            // Metadata
+            // ── metadata ──
             w.write("  \"metadata\": {\n");
             w.write("    \"generated_by\": \"ShadowScan\",\n");
             w.write("    \"version\": \"1.0\",\n");
-            w.write("    \"timestamp\": \"" + LocalDateTime.now() + "\",\n");
+            w.write("    \"timestamp\": \"" + Instant.now() + "\",\n");
             w.write("    \"hosts_scanned\": " + resultats.size() + ",\n");
             w.write("    \"hosts_active\": " + hostsActius.size() + "\n");
             w.write("  },\n");
 
-            // Nodes
+            // ── nodes ──
             w.write("  \"nodes\": [\n");
             for (int i = 0; i < hostsActius.size(); i++) {
                 ResultatHost h = hostsActius.get(i);
@@ -169,40 +252,38 @@ public class JsonExporter {
 
                 w.write("    {\n");
                 w.write("      \"id\": \"" + escapeJson(h.getIp()) + "\",\n");
-                w.write("      \"type\": \"" + tipus + "\",\n");
+                w.write("      \"type\": \"" + escapeJson(tipus) + "\",\n");
                 w.write("      \"ports\": " + toJsonArray(ports) + ",\n");
                 w.write("      \"services\": " + toServiceMap(ports) + ",\n");
-                w.write("      \"risk\": " + String.format("%.2f", risk) + "\n");
+                w.write("      \"risk\": " + fmtDouble(risk) + "\n");
                 w.write("    }");
                 if (i < hostsActius.size() - 1) w.write(",");
                 w.write("\n");
             }
             w.write("  ],\n");
 
-            // Edges — connectem tots els hosts de la mateixa subxarxa
+            // ── edges (graf complet entre hosts actius) ──
             w.write("  \"edges\": [\n");
             boolean firstEdge = true;
             for (int i = 0; i < hostsActius.size(); i++) {
                 for (int j = i + 1; j < hostsActius.size(); j++) {
                     ResultatHost src = hostsActius.get(i);
                     ResultatHost dst = hostsActius.get(j);
-
-                    // El pes és la dificultat d'explotar la connexió:
-                    // baix = fàcil (ports de risc alt oberts), alt = difícil
-                    double weight = calcularPesAresta(src.getPortsOberts(), dst.getPortsOberts());
+                    double weight = calcularPesAresta(
+                        src.getPortsOberts(), dst.getPortsOberts());
 
                     if (!firstEdge) w.write(",\n");
                     w.write("    {\n");
                     w.write("      \"from\": \"" + escapeJson(src.getIp()) + "\",\n");
                     w.write("      \"to\": \"" + escapeJson(dst.getIp()) + "\",\n");
-                    w.write("      \"weight\": " + String.format("%.2f", weight) + "\n");
+                    w.write("      \"weight\": " + fmtDouble(weight) + "\n");
                     w.write("    }");
                     firstEdge = false;
                 }
             }
             w.write("\n  ],\n");
 
-            // Entry point i target
+            // ── entry / target ──
             w.write("  \"entry_point\": \"" + escapeJson(entry) + "\",\n");
             if (tgt != null) {
                 w.write("  \"target\": \"" + escapeJson(tgt) + "\"\n");
@@ -216,7 +297,6 @@ public class JsonExporter {
             System.out.println(">>> [EXPORT] Nodes: " + hostsActius.size() +
                                " | Entry: " + entry + " | Target: " + tgt);
             return true;
-
         } catch (IOException e) {
             System.err.println(">>> [ERROR] No s'ha pogut guardar la topologia: " + e.getMessage());
             return false;
@@ -230,66 +310,75 @@ public class JsonExporter {
         return saveToTopology(resultats, path, null, null);
     }
 
-    // ─── Helpers privats ─────────────────────────────────────────────────────
+    /* ─── Helpers privats ───────────────────────────────────────────────── */
 
     /**
-     * Calcula el nivell de risc d'un host basant-se en els ports oberts.
-     * Retorna un valor entre 0.1 (risc baix) i 1.0 (risc crític).
-     * RedTrace utilitza aquest valor per prioritzar nodes en la ruta d'atac.
+     * Obre un Writer en UTF-8 amb buffering, creant directoris pares si calen.
+     */
+    private static Writer openWriter(String path) throws IOException {
+        Path p = Paths.get(path);
+        Path parent = p.getParent();
+        if (parent != null) Files.createDirectories(parent);
+        return new BufferedWriter(new OutputStreamWriter(
+            Files.newOutputStream(p), StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Format de double amb 2 decimals, locale invariant (sempre punt).
+     */
+    private static String fmtDouble(double v) {
+        return String.format(JSON_LOCALE, "%.2f", v);
+    }
+
+    /**
+     * Calcula el risc d'un host (0.10 - 1.00) segons els ports oberts.
      */
     private static double calcularRisc(List<Integer> ports) {
-        if (ports == null || ports.isEmpty()) return 0.1;
-
-        double risc = 0.1;
+        if (ports == null || ports.isEmpty()) return 0.10;
+        double risc = 0.10;
         for (int port : ports) {
-            if (contePort(HIGH_RISK_PORTS, port))   risc += 0.25;
-            else if (contePort(MEDIUM_RISK_PORTS, port)) risc += 0.15;
-            else if (contePort(LOW_RISK_PORTS, port))    risc += 0.05;
-            else risc += 0.02; // port desconegut
+            if (HIGH_RISK_PORTS.contains(port))        risc += 0.25;
+            else if (MEDIUM_RISK_PORTS.contains(port)) risc += 0.15;
+            else if (LOW_RISK_PORTS.contains(port))    risc += 0.05;
+            else                                       risc += 0.02;
         }
-        return Math.min(risc, 1.0); // cap a 1.0
+        return Math.min(risc, 1.0);
     }
 
     /**
-     * Calcula el pes d'una aresta entre dos nodes.
-     * Pes baix = connexió fàcil d'explotar (ports de risc alt).
-     * Pes alt  = connexió difícil (pocs ports oberts o tots d'alt risc).
+     * Pes d'una aresta: invers del risc combinat (0.10 - 1.00).
+     * Pes baix → connexió fàcil d'explotar; pes alt → difícil.
      */
     private static double calcularPesAresta(List<Integer> portsSrc, List<Integer> portsDst) {
-        // El pes és la inversa del risc combinat dels dos extrems
-        double riscSrc = calcularRisc(portsSrc);
-        double riscDst = calcularRisc(portsDst);
-        double riscMig = (riscSrc + riscDst) / 2.0;
-
-        // Invertim: risc alt → pes baix (fàcil explotar)
+        double riscMig = (calcularRisc(portsSrc) + calcularRisc(portsDst)) / 2.0;
         double pes = 1.0 - riscMig + 0.1;
-        return Math.max(0.1, Math.min(pes, 1.0));
+        return Math.max(0.10, Math.min(pes, 1.0));
     }
 
     /**
-     * Infereix el tipus de node a partir dels ports oberts.
-     * Ajuda a RedTrace a visualitzar millor la topologia.
+     * Infereix el tipus de node per als visualitzadors de RedTrace.
      */
     private static String inferirTipus(List<Integer> ports) {
         if (ports == null || ports.isEmpty()) return "host";
-        boolean teHttp   = ports.contains(80) || ports.contains(443) || ports.contains(8080);
-        boolean teDb     = ports.contains(3306) || ports.contains(5432) || ports.contains(1433);
-        boolean teSsh    = ports.contains(22);
-        boolean teSmb    = ports.contains(445) || ports.contains(139);
-        boolean teRdp    = ports.contains(3389);
-        boolean teDns    = ports.contains(53);
+        boolean teHttp = ports.contains(80)  || ports.contains(443)
+                      || ports.contains(8080) || ports.contains(8443);
+        boolean teDb   = ports.contains(3306) || ports.contains(5432)
+                      || ports.contains(1433) || ports.contains(27017);
+        boolean teSsh  = ports.contains(22);
+        boolean teSmb  = ports.contains(445)  || ports.contains(139);
+        boolean teRdp  = ports.contains(3389);
+        boolean teDns  = ports.contains(53);
 
-        if (teDns)   return "router";
-        if (teSmb)   return "fileserver";
-        if (teDb)    return "database";
+        if (teDns)            return "router";
+        if (teSmb)            return "fileserver";
+        if (teDb)             return "database";
         if (teHttp && !teSsh) return "webserver";
-        if (teRdp)   return "workstation";
+        if (teRdp)            return "workstation";
         return "host";
     }
 
     /**
-     * Genera un objecte JSON amb el mapatge port → servei.
-     * Exemple: {"22":"ssh","80":"http","443":"https"}
+     * {"22":"ssh", "80":"http", ...}
      */
     private static String toServiceMap(List<Integer> ports) {
         if (ports == null || ports.isEmpty()) return "{}";
@@ -297,7 +386,8 @@ public class JsonExporter {
         boolean first = true;
         for (int port : ports) {
             if (!first) sb.append(", ");
-            sb.append("\"").append(port).append("\": \"").append(nomServei(port)).append("\"");
+            sb.append("\"").append(port).append("\": \"")
+              .append(escapeJson(nomServei(port))).append("\"");
             first = false;
         }
         sb.append("}");
@@ -305,32 +395,11 @@ public class JsonExporter {
     }
 
     private static String nomServei(int port) {
-        switch (port) {
-            case 21:   return "ftp";
-            case 22:   return "ssh";
-            case 23:   return "telnet";
-            case 25:   return "smtp";
-            case 53:   return "dns";
-            case 80:   return "http";
-            case 110:  return "pop3";
-            case 139:  return "netbios";
-            case 143:  return "imap";
-            case 443:  return "https";
-            case 445:  return "smb";
-            case 1433: return "mssql";
-            case 3306: return "mysql";
-            case 3389: return "rdp";
-            case 5432: return "postgres";
-            case 5900: return "vnc";
-            case 6379: return "redis";
-            case 8080: return "http-alt";
-            case 8443: return "https-alt";
-            default:   return "unknown-" + port;
-        }
+        return SERVICE_NAMES.getOrDefault(port, "unknown-" + port);
     }
 
     /**
-     * Converteix una llista d'enters en un array JSON: [22, 80, 443]
+     * [22, 80, 443]
      */
     private static String toJsonArray(List<Integer> list) {
         if (list == null || list.isEmpty()) return "[]";
@@ -344,21 +413,30 @@ public class JsonExporter {
     }
 
     /**
-     * Escapa caràcters especials per JSON vàlid.
+     * Escapa caràcters especials per JSON estricte (RFC 8259).
+     * Inclou control chars (< 0x20) com a \uXXXX.
      */
     private static String escapeJson(String s) {
         if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
-
-    private static boolean contePort(int[] array, int port) {
-        for (int p : array) {
-            if (p == port) return true;
+        StringBuilder sb = new StringBuilder(s.length() + 8);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\': sb.append("\\\\"); break;
+                case '"':  sb.append("\\\""); break;
+                case '\n': sb.append("\\n");  break;
+                case '\r': sb.append("\\r");  break;
+                case '\t': sb.append("\\t");  break;
+                case '\b': sb.append("\\b");  break;
+                case '\f': sb.append("\\f");  break;
+                default:
+                    if (c < 0x20) {
+                        sb.append(String.format(JSON_LOCALE, "\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
         }
-        return false;
+        return sb.toString();
     }
 }
