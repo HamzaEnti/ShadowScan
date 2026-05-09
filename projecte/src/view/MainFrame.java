@@ -15,6 +15,7 @@ public class MainFrame extends JFrame {
     private SecurityPanel securityPanel;
     private DashboardPanel dashboardPanel;
     private CvePanel cvePanel;
+    private AdvancedPanel advancedPanel;
     private JTextArea txtConsole;
 
     private JButton btnNavDiscovery;
@@ -22,6 +23,7 @@ public class MainFrame extends JFrame {
     private JButton btnNavSecurity;
     private JButton btnNavDashboard;
     private JButton btnNavCve;
+    private JButton btnNavAdvanced;
 
     // Colors del tema fosc per al menú lateral
     // Assisted by Claude (Anthropic) — dark sidebar design
@@ -44,7 +46,7 @@ public class MainFrame extends JFrame {
     }
 
     private void configurarFinestra() {
-        this.setTitle("ShadowScan v1.2 — Network Security Toolkit");
+        this.setTitle("ShadowScan v2.0 — Network Security Toolkit");
         this.setSize(1200, 800);
         this.setMinimumSize(new Dimension(900, 600));
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -71,12 +73,14 @@ public class MainFrame extends JFrame {
         securityPanel  = new SecurityPanel(this);
         dashboardPanel = new DashboardPanel(this);
         cvePanel       = new CvePanel(this);
+        advancedPanel  = new AdvancedPanel(this);
 
         tabbedPane.addTab("Discovery", discoveryPanel);
         tabbedPane.addTab("Nmap",      nmapPanel);
         tabbedPane.addTab("Security",  securityPanel);
         tabbedPane.addTab("Dashboard", dashboardPanel);
         tabbedPane.addTab("CVE",       cvePanel);
+        tabbedPane.addTab("Advanced",  advancedPanel);
 
         this.add(tabbedPane, BorderLayout.CENTER);
         crearMenuLateral();
@@ -114,6 +118,7 @@ public class MainFrame extends JFrame {
         btnNavSecurity  = crearBotoSidebar("  Security Tools", "3");
         btnNavDashboard = crearBotoSidebar("  Dashboard", "4");
         btnNavCve       = crearBotoSidebar("  CVE Lookup", "5");
+        btnNavAdvanced  = crearBotoSidebar("  Advanced (v2.0)", "6");
 
         // selecció inicial
         marcarBotoSeleccionat(btnNavDiscovery);
@@ -135,10 +140,12 @@ public class MainFrame extends JFrame {
         sidebar.add(btnNavDashboard);
         sidebar.add(Box.createVerticalStrut(6));
         sidebar.add(btnNavCve);
+        sidebar.add(Box.createVerticalStrut(6));
+        sidebar.add(btnNavAdvanced);
         sidebar.add(Box.createVerticalGlue());
 
         // versió al peu del sidebar
-        JLabel lblVer = new JLabel("v1.2.0");
+        JLabel lblVer = new JLabel("v2.0.0");
         lblVer.setFont(new Font("Segoe UI", Font.PLAIN, 10));
         lblVer.setForeground(new Color(70, 85, 110));
         lblVer.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -149,28 +156,33 @@ public class MainFrame extends JFrame {
         btnNavDiscovery.addActionListener(e -> {
             tabbedPane.setSelectedIndex(0);
             marcarBotoSeleccionat(btnNavDiscovery);
-            desmarcarBotons(btnNavNmap, btnNavSecurity, btnNavDashboard, btnNavCve);
+            desmarcarBotons(btnNavNmap, btnNavSecurity, btnNavDashboard, btnNavCve, btnNavAdvanced);
         });
         btnNavNmap.addActionListener(e -> {
             tabbedPane.setSelectedIndex(1);
             marcarBotoSeleccionat(btnNavNmap);
-            desmarcarBotons(btnNavDiscovery, btnNavSecurity, btnNavDashboard, btnNavCve);
+            desmarcarBotons(btnNavDiscovery, btnNavSecurity, btnNavDashboard, btnNavCve, btnNavAdvanced);
         });
         btnNavSecurity.addActionListener(e -> {
             tabbedPane.setSelectedIndex(2);
             marcarBotoSeleccionat(btnNavSecurity);
-            desmarcarBotons(btnNavDiscovery, btnNavNmap, btnNavDashboard, btnNavCve);
+            desmarcarBotons(btnNavDiscovery, btnNavNmap, btnNavDashboard, btnNavCve, btnNavAdvanced);
         });
         btnNavDashboard.addActionListener(e -> {
             tabbedPane.setSelectedIndex(3);
             marcarBotoSeleccionat(btnNavDashboard);
-            desmarcarBotons(btnNavDiscovery, btnNavNmap, btnNavSecurity, btnNavCve);
+            desmarcarBotons(btnNavDiscovery, btnNavNmap, btnNavSecurity, btnNavCve, btnNavAdvanced);
             dashboardPanel.refrescar();
         });
         btnNavCve.addActionListener(e -> {
             tabbedPane.setSelectedIndex(4);
             marcarBotoSeleccionat(btnNavCve);
-            desmarcarBotons(btnNavDiscovery, btnNavNmap, btnNavSecurity, btnNavDashboard);
+            desmarcarBotons(btnNavDiscovery, btnNavNmap, btnNavSecurity, btnNavDashboard, btnNavAdvanced);
+        });
+        btnNavAdvanced.addActionListener(e -> {
+            tabbedPane.setSelectedIndex(5);
+            marcarBotoSeleccionat(btnNavAdvanced);
+            desmarcarBotons(btnNavDiscovery, btnNavNmap, btnNavSecurity, btnNavDashboard, btnNavCve);
         });
 
         this.add(sidebar, BorderLayout.WEST);
@@ -299,4 +311,5 @@ public class MainFrame extends JFrame {
     public SecurityPanel getSecurityPanel()   { return securityPanel; }
     public DashboardPanel getDashboardPanel() { return dashboardPanel; }
     public CvePanel getCvePanel()             { return cvePanel; }
+    public AdvancedPanel getAdvancedPanel()   { return advancedPanel; }
 }

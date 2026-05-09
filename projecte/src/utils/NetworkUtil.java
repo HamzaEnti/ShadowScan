@@ -1,9 +1,14 @@
 package utils;
 
 import java.io.IOException;
+import java.math.BigInteger;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
@@ -88,6 +93,14 @@ public class NetworkUtil {
         return ips;
     }
 
+    /**
+     * Genera un rang d'IPs detectant automàticament IPv4 vs IPv6.
+     */
+    public static List<String> smartRange(String startIp, String endIp) {
+        if (isIPv6(startIp) || isIPv6(endIp)) return rangIpsV6(startIp, endIp);
+        return rangIps(startIp, endIp);
+    }
+
     /** Converteix una IPv4 en un long sense signe. -1 si és invàlida. */
     public static long ipToLong(String ip) {
         if (ip == null) return -1;
@@ -109,5 +122,136 @@ public class NetworkUtil {
     public static String longToIp(long n) {
         return ((n >> 24) & 0xFF) + "." + ((n >> 16) & 0xFF) + "."
              + ((n >> 8)  & 0xFF) + "." + ( n        & 0xFF);
+    }
+
+    /* ─── Suport IPv6 ─────────────────────────────────────────────────── */
+
+    public static boolean isIPv6(String addr) {
+        if (addr == null) return false;
+        try {
+            return InetAddress.getByName(addr) instanceof Inet6Address;
+        } catch (UnknownHostException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Genera un rang d'IPs IPv6. Usa BigInteger perquè 128 bits no caben
+     * en cap primitiu Java. Limitem a 4096 hosts per protegir-nos d'abusos.
+     */
+    public static List<String> rangIpsV6(String startIp, String endIp) {
+        List<String> ips = new ArrayList<>();
+        try {
+            BigInteger ini = ipv6ToBigInt(startIp);
+            BigInteger fi  = ipv6ToBigInt(endIp);
+            if (ini == null || fi == null || fi.compareTo(ini) < 0) return ips;
+            BigInteger diff = fi.subtract(ini);
+            if (diff.compareTo(BigInteger.valueOf(4096)) > 0) return ips;
+            for (BigInteger n = ini; n.compareTo(fi) <= 0; n = n.add(BigInteger.ONE)) {
+                ips.add(bigIntToIpv6(n));
+            }
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+        return ips;
+    }
+
+    public static BigInteger ipv6ToBigInt(String addr) {
+        try {
+            InetAddress a = InetAddress.getByName(addr);
+            byte[] bytes = a.getAddress();
+            if (bytes.length != 16) return null;
+            return new BigInteger(1, bytes);
+        } catch (UnknownHostException e) {
+            return null;
+        }
+    }
+
+    public static String bigIntToIpv6(BigInteger n) {
+        byte[] full = new byte[16];
+        byte[] raw = n.toByteArray();
+        // BigInteger pot afegir un byte de signe; copiem alineat a la dreta
+        int len = Math.min(raw.length, 16);
+        System.arraycopy(raw, raw.length - len, full, 16 - len, len);
+        try {
+            return InetAddress.getByAddress(full).getHostAddress();
+        } catch (UnknownHostException e) {
+            return null;
+        }
+    }
+
+    /* ─── Suport UDP ──────────────────────────────────────────────────── */
+
+    /**
+     * UDP scan amb heurística per defecte:
+     *   - Enviem un datagrama buit (o magic bytes per a serveis coneguts)
+     *   - Esperem la resposta
+     *   - Sense resposta dins del timeout → "open|filtered" (UDP no garanteix retorn)
+     *   - Excepció PortUnreachable (ICMP) → tancat
+     *
+     * Java no exposa ICMP directament, així que basem la detecció en si
+     * arriba alguna resposta. Hi ha falsos positius — cal documentar-ho a
+     * l'usuari. Retorna true en cas de "open" o "open|filtered".
+     */
+    public static boolean isUdpPortOpen(String ip, int port, int timeoutMs) {
+        try (DatagramSocket s = new DatagramSocket()) {
+            s.setSoTimeout(timeoutMs);
+            InetAddress addr = InetAddress.getByName(ip);
+            byte[] payload = udpProbe(port);
+            s.send(new DatagramPacket(payload, payload.length, addr, port));
+            byte[] buf = new byte[512];
+            DatagramPacket resp = new DatagramPacket(buf, buf.length);
+            s.receive(resp);
+            return true; // resposta rebuda → port obert segur
+        } catch (SocketTimeoutException e) {
+            // No resposta: UDP open|filtered, classifiquem com a probable obert
+            return true;
+        } catch (java.net.PortUnreachableException e) {
+            return false;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /**
+     * UDP estricte: només retorna true si rebem alguna resposta. Útil quan
+     * volem reduir falsos positius a costa de perdre serveis silenciosos.
+     */
+    public static boolean isUdpPortRespondingStrict(String ip, int port, int timeoutMs) {
+        try (DatagramSocket s = new DatagramSocket()) {
+            s.setSoTimeout(timeoutMs);
+            InetAddress addr = InetAddress.getByName(ip);
+            byte[] payload = udpProbe(port);
+            s.send(new DatagramPacket(payload, payload.length, addr, port));
+            byte[] buf = new byte[512];
+            s.receive(new DatagramPacket(buf, buf.length));
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Probes minimalistes per a alguns ports UDP comuns. Per a la resta,
+     * un payload buit (que la majoria de serveis ignoraran).
+     */
+    private static byte[] udpProbe(int port) {
+        switch (port) {
+            case 53: // DNS query: id=0x1234, qd=1, query "version.bind" CHAOS TXT
+                return new byte[]{
+                    0x12, 0x34, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x07, 'v','e','r','s','i','o','n', 0x04, 'b','i','n','d', 0x00,
+                    0x00, 0x10, 0x00, 0x03
+                };
+            case 161: // SNMP GetRequest minimal (community="public")
+                return new byte[]{
+                    0x30, 0x26, 0x02, 0x01, 0x00, 0x04, 0x06, 'p','u','b','l','i','c',
+                    (byte) 0xA0, 0x19, 0x02, 0x04, 0x71, 0x44, 0x42, 0x42,
+                    0x02, 0x01, 0x00, 0x02, 0x01, 0x00, 0x30, 0x0B, 0x30, 0x09,
+                    0x06, 0x05, 0x2B, 0x06, 0x01, 0x02, 0x01, 0x05, 0x00
+                };
+            default:
+                return new byte[0];
+        }
     }
 }

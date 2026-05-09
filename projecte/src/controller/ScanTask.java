@@ -22,18 +22,28 @@ public class ScanTask implements Runnable {
     private final String ip;
     private final HostFoundListener listener;
     private final PortScanMode mode;
+    private final boolean udpScan;
 
     private static final int PORT_THREADS = 50;
     private static final int PORT_TIMEOUT = 50;
+    private static final int UDP_TIMEOUT = 600;
     // Backpressure: limita la cua d'objectes pendents tant en mode FULL com PARCIAL
     private static final int MAX_QUEUED = 500;
     private static final int ICMP_TIMEOUT = 200;
     private static final int TCP_FALLBACK_TIMEOUT = 150;
 
+    /** Ports UDP comuns escanejats si udpScan == true. Curt per cost. */
+    private static final int[] UDP_PORTS = {53, 67, 69, 123, 137, 138, 161, 500, 514, 1900, 5353};
+
     public ScanTask(String ip, HostFoundListener listener, PortScanMode mode) {
+        this(ip, listener, mode, false);
+    }
+
+    public ScanTask(String ip, HostFoundListener listener, PortScanMode mode, boolean udpScan) {
         this.ip = ip;
         this.listener = listener;
         this.mode = mode;
+        this.udpScan = udpScan;
     }
 
     @Override
@@ -84,6 +94,15 @@ public class ScanTask implements Runnable {
                 portPool.awaitTermination(10, TimeUnit.MINUTES);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+            }
+        }
+
+        // UDP scan opcional — probes a un conjunt curt de ports comuns
+        if (udpScan) {
+            for (int up : UDP_PORTS) {
+                if (NetworkUtil.isUdpPortRespondingStrict(ip, up, UDP_TIMEOUT)) {
+                    portsOberts.add(up);
+                }
             }
         }
 

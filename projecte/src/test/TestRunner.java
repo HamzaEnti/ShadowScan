@@ -81,6 +81,9 @@ public class TestRunner {
         CveServiceTest.run();
         DashboardTest.run();
         PdfReportTest.run();
+        ScanProfileTest.run();
+        IPv6Test.run();
+        RestApiTest.run();
         int failed = summary();
         System.exit(failed == 0 ? 0 : 1);
     }

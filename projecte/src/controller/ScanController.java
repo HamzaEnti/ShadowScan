@@ -48,11 +48,15 @@ public class ScanController {
     }
 
     /**
-     * Versió generalitzada: accepta qualsevol rang IPv4 (ex: 10.0.0.5 → 10.0.0.50,
-     * o subxarxes /16 senceres). Usa NetworkUtil.rangIps per validar.
+     * Versió generalitzada: accepta qualsevol rang IPv4 o IPv6.
+     * Detecta automàticament la família via NetworkUtil.smartRange.
      */
     public void escanearRang(String startIp, String endIp, PortScanMode mode) {
-        List<String> ips = NetworkUtil.rangIps(startIp, endIp);
+        escanearRang(startIp, endIp, mode, false);
+    }
+
+    public void escanearRang(String startIp, String endIp, PortScanMode mode, boolean udp) {
+        List<String> ips = NetworkUtil.smartRange(startIp, endIp);
         if (ips.isEmpty()) {
             System.err.println(">>> [SCAN] Rang invàlid: " + startIp + " → " + endIp);
             if (callback != null) callback.onScanFinished(0);
@@ -79,7 +83,7 @@ public class ScanController {
                 System.out.println(">>> [SCAN] Escaneig aturat per l'usuari");
                 break;
             }
-            pool.execute(new ScanTask(ip, counting, mode));
+            pool.execute(new ScanTask(ip, counting, mode, udp));
         }
 
         pool.shutdown();

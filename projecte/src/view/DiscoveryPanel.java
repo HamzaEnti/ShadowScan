@@ -20,6 +20,7 @@ public class DiscoveryPanel extends BasePanel implements HostFoundListener {
     private JTextField txtIpFi;
     private JRadioButton rbPortsComuns;
     private JRadioButton rbTotsPorts;
+    private JCheckBox chkUdp;
 
     private JButton btnStart;
     private JButton btnStop;
@@ -108,8 +109,11 @@ public class DiscoveryPanel extends BasePanel implements HostFoundListener {
         grup.add(rbPortsComuns);
         grup.add(rbTotsPorts);
 
+        chkUdp = new JCheckBox("UDP (DNS, SNMP, etc.)");
+
         pnlMode.add(rbPortsComuns);
         pnlMode.add(rbTotsPorts);
+        pnlMode.add(chkUdp);
 
         JPanel pnlProgress = new JPanel(new BorderLayout(8, 0));
         pnlProgress.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
@@ -210,8 +214,8 @@ public class DiscoveryPanel extends BasePanel implements HostFoundListener {
         lblProgress.setText("Escanejant rang " + ipInici + " → " + ipFi + "...");
 
         PortScanMode mode = rbPortsComuns.isSelected() ? PortScanMode.PARCIAL : PortScanMode.FULL;
-        // MILLORA: usem el rang real introduït per l'usuari
-        controller.escanearRang(ipInici, ipFi, mode);
+        // MILLORA: usem el rang real introduït per l'usuari + flag UDP
+        controller.escanearRang(ipInici, ipFi, mode, chkUdp.isSelected());
     }
 
     private void exportarRedTrace() {
@@ -270,8 +274,16 @@ public class DiscoveryPanel extends BasePanel implements HostFoundListener {
 
     private boolean ipValida(String ip) {
         if (ip == null || ip.isEmpty()) return false;
-        String regex = "^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$";
-        return ip.matches(regex);
+        // IPv4 amb regex estricte
+        String v4 = "^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$";
+        if (ip.matches(v4)) return true;
+        // IPv6: deleguem a InetAddress.getByName per cobrir totes les variants vàlides
+        try {
+            java.net.InetAddress a = java.net.InetAddress.getByName(ip);
+            return a instanceof java.net.Inet6Address;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public void setIpInici(String ip) { txtIpInici.setText(ip); }
