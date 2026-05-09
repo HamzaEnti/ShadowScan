@@ -84,20 +84,20 @@ public class BruteForceService extends AbstractScanService {
             pb.redirectErrorStream(true);
             Process p = pb.start();
 
-            BufferedReader reader = new BufferedReader(
-                new InputStreamReader(p.getInputStream())
-            );
-            String line;
-
-            while ((line = reader.readLine()) != null) {
-                System.out.println("[HYDRA] " + line);
-                resultats.add(line);
+            // Bug fix: try-with-resources per evitar leak de descriptors.
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println("[HYDRA] " + line);
+                    resultats.add(line);
+                }
             }
 
             // FIX: timeout de 10 minuts, no esperem indefinidament
             boolean finished = p.waitFor(10, TimeUnit.MINUTES);
             if (!finished) {
-                p.destroy();
+                p.destroyForcibly();
                 logError("Hydra timeout (10 min) — procés aturat.");
             } else {
                 log("Atac finalitzat.");

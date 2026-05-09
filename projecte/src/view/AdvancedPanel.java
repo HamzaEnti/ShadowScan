@@ -412,7 +412,22 @@ public class AdvancedPanel extends BasePanel {
         List<WorkerEndpoint> endpoints = new ArrayList<>();
         for (int i = 0; i < mWorkers.getRowCount(); i++) {
             String h = (String) mWorkers.getValueAt(i, 0);
-            int p = Integer.parseInt((String) mWorkers.getValueAt(i, 1));
+            String pStr = String.valueOf(mWorkers.getValueAt(i, 1));
+            int p;
+            try {
+                p = Integer.parseInt(pStr.trim());
+            } catch (NumberFormatException nfe) {
+                JOptionPane.showMessageDialog(this,
+                    "Port invàlid al worker " + h + ": " + pStr,
+                    "Configuració incorrecta", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if (p < 1 || p > 65535) {
+                JOptionPane.showMessageDialog(this,
+                    "Port fora de rang [1-65535] al worker " + h + ": " + p,
+                    "Configuració incorrecta", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
             String t = (String) mWorkers.getValueAt(i, 2);
             endpoints.add(new WorkerEndpoint(h, p, (t == null || t.isEmpty()) ? null : t));
         }

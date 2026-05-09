@@ -79,24 +79,24 @@ public class WebDiscoveryService extends AbstractScanService {
             pb.redirectErrorStream(true);
 
             Process process = pb.start();
-            BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream())
-            );
-            String line;
-
-            while ((line = reader.readLine()) != null) {
-                System.out.println("[DIRB] " + line);
-                if (line.contains("CODE:200") ||
-                    line.contains("DIRECTORY") ||
-                    line.contains("+")) {
-                    foundUrls.add(line);
+            // Bug fix: try-with-resources per evitar leak de descriptors.
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println("[DIRB] " + line);
+                    if (line.contains("CODE:200") ||
+                        line.contains("DIRECTORY") ||
+                        line.contains("+")) {
+                        foundUrls.add(line);
+                    }
                 }
             }
 
             // FIX: timeout de 10 minuts
             boolean finished = process.waitFor(10, TimeUnit.MINUTES);
             if (!finished) {
-                process.destroy();
+                process.destroyForcibly();
                 logError("Dirb timeout (10 min) — procés aturat.");
             } else {
                 log("Finalitzat (Codi: " + process.exitValue() + ")");

@@ -5,7 +5,6 @@ import java.io.PrintStream;
 import java.net.InetAddress;
 import javax.swing.*;
 import javax.swing.plaf.basic.BasicTabbedPaneUI;
-import model.ResultatHost;
 
 public class MainFrame extends JFrame {
 
@@ -300,10 +299,6 @@ public class MainFrame extends JFrame {
                 System.out.println(">>> [BOOT] Verificació completada.");
             });
         }).start();
-    }
-
-    public synchronized void afegirResultat(ResultatHost host) {
-        discoveryPanel.afegirResultat(host);
     }
 
     public DiscoveryPanel getDiscoveryPanel() { return discoveryPanel; }

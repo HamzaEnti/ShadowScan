@@ -84,6 +84,7 @@ public class TestRunner {
         ScanProfileTest.run();
         IPv6Test.run();
         RestApiTest.run();
+        BugfixTest.run();
         int failed = summary();
         System.exit(failed == 0 ? 0 : 1);
     }

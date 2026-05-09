@@ -95,10 +95,18 @@ public class NetworkUtil {
 
     /**
      * Genera un rang d'IPs detectant automàticament IPv4 vs IPv6.
+     * Si les dues IPs no són de la mateixa família retorna llista buida i
+     * loga l'error en lloc de fallar de manera obscura.
      */
     public static List<String> smartRange(String startIp, String endIp) {
-        if (isIPv6(startIp) || isIPv6(endIp)) return rangIpsV6(startIp, endIp);
-        return rangIps(startIp, endIp);
+        boolean s6 = isIPv6(startIp);
+        boolean e6 = isIPv6(endIp);
+        if (s6 != e6) {
+            System.err.println(">>> [RANGE] Mescla d'IPv4 i IPv6 no suportada: "
+                + startIp + " → " + endIp);
+            return new ArrayList<>();
+        }
+        return s6 ? rangIpsV6(startIp, endIp) : rangIps(startIp, endIp);
     }
 
     /** Converteix una IPv4 en un long sense signe. -1 si és invàlida. */

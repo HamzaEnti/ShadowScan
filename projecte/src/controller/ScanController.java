@@ -55,7 +55,16 @@ public class ScanController {
         escanearRang(startIp, endIp, mode, false);
     }
 
-    public void escanearRang(String startIp, String endIp, PortScanMode mode, boolean udp) {
+    public synchronized void escanearRang(String startIp, String endIp, PortScanMode mode, boolean udp) {
+        // Bug fix: si ja hi ha un escaneig en curs, no en llencem un altre
+        // (abans, una segona crida creava un nou ExecutorService i deixava
+        // el pool anterior orfe → fuga de threads i resultats barrejats).
+        if (enExecucio) {
+            System.err.println(">>> [SCAN] Ja hi ha un escaneig en curs; ignorant nova petició.");
+            if (callback != null) callback.onScanFinished(hostsFound.get());
+            return;
+        }
+
         List<String> ips = NetworkUtil.smartRange(startIp, endIp);
         if (ips.isEmpty()) {
             System.err.println(">>> [SCAN] Rang invàlid: " + startIp + " → " + endIp);

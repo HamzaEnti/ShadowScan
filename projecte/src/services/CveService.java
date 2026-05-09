@@ -88,26 +88,29 @@ public class CveService {
         String url = NVD_BASE + URLEncoder.encode(q.toString(), StandardCharsets.UTF_8);
 
         HttpURLConnection conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
-        conn.setConnectTimeout(HTTP_TIMEOUT);
-        conn.setReadTimeout(HTTP_TIMEOUT);
-        conn.setRequestProperty("Accept", "application/json");
-        conn.setRequestProperty("User-Agent", "ShadowScan/1.2");
+        // Bug fix: la versió antiga només cridava disconnect() en l'èxit
+        // i en HTTP != 200; si readLine() llançava IOException la connexió
+        // quedava oberta. try/finally garanteix neteja en tots els camins.
+        try {
+            conn.setConnectTimeout(HTTP_TIMEOUT);
+            conn.setReadTimeout(HTTP_TIMEOUT);
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "ShadowScan/1.2");
 
-        int code = conn.getResponseCode();
-        if (code != 200) {
+            int code = conn.getResponseCode();
+            if (code != 200) throw new IOException("HTTP " + code);
+
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader r = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = r.readLine()) != null) sb.append(line);
+            }
+
+            return parseNvdResponse(sb.toString());
+        } finally {
             conn.disconnect();
-            throw new IOException("HTTP " + code);
         }
-
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader r = new BufferedReader(
-                new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = r.readLine()) != null) sb.append(line);
-        }
-        conn.disconnect();
-
-        return parseNvdResponse(sb.toString());
     }
 
     @SuppressWarnings("unchecked")

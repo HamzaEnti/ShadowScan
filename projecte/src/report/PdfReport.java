@@ -39,6 +39,10 @@ public final class PdfReport {
     private PdfReport() {}
 
     public static void write(File out, List<ResultatHost> hosts) throws IOException {
+        // Bug fix: tots els bucles assumien hosts != null. Si algú passava
+        // null (REST API mal validada, p.ex.), petava amb NPE dins
+        // DashboardPanel.compute. Tractem null com a llista buida.
+        if (hosts == null) hosts = java.util.Collections.emptyList();
         DashboardPanel.Stats stats = DashboardPanel.compute(hosts);
 
         Pdf pdf = new Pdf();

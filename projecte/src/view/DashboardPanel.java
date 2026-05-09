@@ -22,14 +22,16 @@ import report.PdfReport;
  */
 public class DashboardPanel extends BasePanel {
 
-    private MainFrame parent;
+    // Bug: tenia un camp 'parent' redundant que s'assignava al constructor
+    // DESPRÉS de super(parent). Si algú cridava refrescar() durant la
+    // construcció, NPE. Reusem el parentFrame heretat de BasePanel,
+    // que sí està inicialitzat abans d'initComponents().
     private DashboardCanvas canvas;
     private JButton btnRefresh;
     private JButton btnExportPdf;
 
     public DashboardPanel(MainFrame parent) {
         super(parent);
-        this.parent = parent;
     }
 
     @Override
@@ -57,12 +59,12 @@ public class DashboardPanel extends BasePanel {
 
     /** Refresca dades llegint el panel de Discovery. */
     public void refrescar() {
-        canvas.dades = parent != null ? parent.getDiscoveryPanel().getResultats() : List.of();
+        canvas.dades = parentFrame != null ? parentFrame.getDiscoveryPanel().getResultats() : List.of();
         canvas.repaint();
     }
 
     private void exportarPdf() {
-        List<ResultatHost> dades = parent.getDiscoveryPanel().getResultats();
+        List<ResultatHost> dades = parentFrame.getDiscoveryPanel().getResultats();
         if (dades.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                 "No hi ha dades. Fes primer un escaneig.",

@@ -150,16 +150,15 @@ public class JsonExporter {
             return false;
         }
 
+        // Bug fix: abans aquest mètode escrivia un esquema antic (ip/esViu/
+        // estat/ports) mentre que saveToJSON ja emetia el nou format amb
+        // hostname i risc. Resultat: dos exports incompatibles. Ara usem
+        // h.toJson() i només afegim indentació per llegibilitat.
         try (Writer w = openWriter(path)) {
             w.write("[\n");
             for (int i = 0; i < resultats.size(); i++) {
-                ResultatHost h = resultats.get(i);
-                w.write("  {\n");
-                w.write("    \"ip\": \"" + escapeJson(h.getIp()) + "\",\n");
-                w.write("    \"esViu\": " + h.isEsViu() + ",\n");
-                w.write("    \"estat\": \"" + escapeJson(String.valueOf(h.getEstat())) + "\",\n");
-                w.write("    \"ports\": " + toJsonArray(h.getPortsOberts()) + "\n");
-                w.write("  }");
+                w.write("  ");
+                w.write(resultats.get(i).toJson());
                 if (i < resultats.size() - 1) w.write(",");
                 w.write("\n");
             }

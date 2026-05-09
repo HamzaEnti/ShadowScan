@@ -69,20 +69,20 @@ public class FuzzingService extends AbstractScanService {
             pb.redirectErrorStream(true);
             Process p = pb.start();
 
-            BufferedReader reader = new BufferedReader(
-                new InputStreamReader(p.getInputStream())
-            );
-            String line;
-
-            while ((line = reader.readLine()) != null) {
-                System.out.println("[FFUF] " + line);
-                resultats.add(line);
+            // Bug fix: try-with-resources per evitar leak de descriptors.
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println("[FFUF] " + line);
+                    resultats.add(line);
+                }
             }
 
             // FIX: timeout de 10 minuts
             boolean finished = p.waitFor(10, TimeUnit.MINUTES);
             if (!finished) {
-                p.destroy();
+                p.destroyForcibly();
                 logError("Ffuf timeout (10 min) — procés aturat.");
             } else {
                 log("Finalitzat.");

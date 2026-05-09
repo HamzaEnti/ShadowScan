@@ -74,11 +74,14 @@ public class ScanProfile {
     @SuppressWarnings("unchecked")
     public static ScanProfile fromJson(String src) {
         Map<String, Object> m = JsonParser.parseObject(src);
+        // Bug fix: getOrDefault només retorna el default si la KEY falta;
+        // si el valor és literalment null, retornaria null i petaria el cast
+        // / el toString() posterior. Wrappem amb str() defensiu.
         ScanProfile p = new ScanProfile(
-            (String) m.getOrDefault("name", "(sense nom)"),
-            (String) m.getOrDefault("startIp", ""),
-            (String) m.getOrDefault("endIp", ""),
-            (String) m.getOrDefault("mode", "PARCIAL")
+            str(m.get("name"),    "(sense nom)"),
+            str(m.get("startIp"), ""),
+            str(m.get("endIp"),   ""),
+            str(m.get("mode"),    "PARCIAL")
         );
         Object udp = m.get("udp");
         if (udp instanceof Boolean) p.setUdp((Boolean) udp);
@@ -91,6 +94,10 @@ public class ScanProfile {
             p.setCustomPorts(ip);
         }
         return p;
+    }
+
+    private static String str(Object v, String def) {
+        return v == null ? def : v.toString();
     }
 
     @Override

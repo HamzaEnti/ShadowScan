@@ -50,20 +50,22 @@ public class NmapWrapper extends AbstractScanService {
 
             Process process = pb.start();
 
-            BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream())
-            );
-            String line;
-
-            while ((line = reader.readLine()) != null) {
-                System.out.println(line);
-                resultats.add(line);
+            // Bug fix: el BufferedReader no estava en try-with-resources.
+            // Si readLine llançava IOException, el pipe del procés quedava
+            // obert i la JVM acumulava descriptors fins esgotar-los.
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println(line);
+                    resultats.add(line);
+                }
             }
 
             // FIX: timeout de 5 minuts per evitar processos bloquejats indefinidament
             boolean finished = process.waitFor(5, TimeUnit.MINUTES);
             if (!finished) {
-                process.destroy();
+                process.destroyForcibly();
                 logError("Nmap timeout (5 min) — procés aturat.");
             } else if (process.exitValue() == 0) {
                 log("Escaneig finalitzat amb exit.");
