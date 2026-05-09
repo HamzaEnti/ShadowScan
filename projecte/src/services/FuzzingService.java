@@ -7,17 +7,19 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class FuzzingService extends AbstractScanService {
 
     private String wordlistPath;
-    private List<String> resultats;
+    // FIX: synchronized list per a accessos concurrents.
+    private final List<String> resultats;
 
     public FuzzingService() {
         super("FFUF");
-        this.resultats = new ArrayList<>();
+        this.resultats = Collections.synchronizedList(new ArrayList<>());
     }
 
     @Override
@@ -46,7 +48,7 @@ public class FuzzingService extends AbstractScanService {
         this.wordlistPath = path;
     }
 
-    public void lanzarFuzzing(String ip, int port, String rutaWordlist) {
+    public synchronized void lanzarFuzzing(String ip, int port, String rutaWordlist) {
         if (!fitxerExisteix(rutaWordlist)) {
             logError("Wordlist no trobada: " + rutaWordlist);
             return;
@@ -91,12 +93,12 @@ public class FuzzingService extends AbstractScanService {
         }
     }
 
-    public List<String> getResultats() {
+    public synchronized List<String> getResultats() {
         return new ArrayList<>(resultats);
     }
 
     // FIX: LocalDateTime en comptes de java.util.Date (deprecated)
-    public boolean exportToCSV(File file) {
+    public synchronized boolean exportToCSV(File file) {
         if (resultats.isEmpty()) {
             log("No hi ha resultats per exportar.");
             return false;

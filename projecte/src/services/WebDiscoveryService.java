@@ -7,17 +7,19 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class WebDiscoveryService extends AbstractScanService {
 
-    private List<String> foundUrls;
+    // FIX: synchronized list i mètodes principals synchronized.
+    private final List<String> foundUrls;
     private String customDictionaryPath;
 
     public WebDiscoveryService() {
         super("DIRB");
-        this.foundUrls = new ArrayList<>();
+        this.foundUrls = Collections.synchronizedList(new ArrayList<>());
         this.customDictionaryPath = null;
     }
 
@@ -55,7 +57,7 @@ public class WebDiscoveryService extends AbstractScanService {
         discoverWebPaths(url);
     }
 
-    public void discoverWebPaths(String baseUrl) {
+    public synchronized void discoverWebPaths(String baseUrl) {
         log("Iniciant escaneig a: " + baseUrl);
         this.foundUrls.clear();
 
@@ -105,12 +107,12 @@ public class WebDiscoveryService extends AbstractScanService {
         }
     }
 
-    public List<String> getFoundUrls() {
+    public synchronized List<String> getFoundUrls() {
         return new ArrayList<>(foundUrls);
     }
 
     // FIX: LocalDateTime en comptes de java.util.Date (deprecated)
-    public boolean exportReportToCSV(File file) {
+    public synchronized boolean exportReportToCSV(File file) {
         if (foundUrls.isEmpty()) {
             log("No hi ha resultats per exportar.");
             return false;

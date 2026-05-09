@@ -7,16 +7,19 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public class NmapWrapper extends AbstractScanService {
 
-    private List<String> resultats;
+    // FIX: synchronized list per evitar curses si dos threads criden
+    // escanearConNmap concurrentment (panel UI + verificació async).
+    private final List<String> resultats;
 
     public NmapWrapper() {
         super("NMAP");
-        this.resultats = new ArrayList<>();
+        this.resultats = Collections.synchronizedList(new ArrayList<>());
     }
 
     @Override
@@ -37,7 +40,7 @@ public class NmapWrapper extends AbstractScanService {
         escanearConNmap(ip);
     }
 
-    public void escanearConNmap(String ip) {
+    public synchronized void escanearConNmap(String ip) {
         log("Llancant comanda contra: " + ip);
         resultats.clear();
 
@@ -73,12 +76,12 @@ public class NmapWrapper extends AbstractScanService {
         }
     }
 
-    public List<String> getResultats() {
+    public synchronized List<String> getResultats() {
         return new ArrayList<>(resultats);
     }
 
     // FIX: LocalDateTime en comptes de new java.util.Date() (deprecated des de Java 8)
-    public boolean exportToCSV(File file) {
+    public synchronized boolean exportToCSV(File file) {
         if (resultats.isEmpty()) {
             log("No hi ha resultats per exportar.");
             return false;

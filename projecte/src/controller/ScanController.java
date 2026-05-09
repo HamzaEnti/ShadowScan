@@ -1,28 +1,36 @@
 package controller;
 
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import view.MainFrame;
+import java.util.concurrent.atomic.AtomicInteger;
+import model.ResultatHost;
+import utils.NetworkUtil;
 
+/**
+ * Orquestra l'escaneig d'un rang d'IPs.
+ *
+ * Ja no depèn de MainFrame: la comunicació amb la vista es fa via
+ * {@link HostFoundListener} (per a cada host trobat) i {@link ScanCallback}
+ * (al finalitzar). Així el controlador és testejable sense Swing.
+ */
 public class ScanController {
 
     private ExecutorService pool;
-    // FIX: volatile per garantir visibilitat entre threads (abans era plain boolean → race condition)
     private volatile boolean enExecucio;
-    private MainFrame vista;
+    private final HostFoundListener hostListener;
+    private final AtomicInteger hostsFound = new AtomicInteger(0);
     private static final int NUM_THREADS = 20;
 
-    // Callback opcional per notificar quan l'escaneig acaba
-    // Assisted by Claude (Anthropic) — callback pattern for scan completion UI update
     public interface ScanCallback {
         void onScanFinished(int hostsFound);
     }
 
     private ScanCallback callback;
 
-    public ScanController(MainFrame v) {
-        this.vista = v;
+    public ScanController(HostFoundListener hostListener) {
+        this.hostListener = hostListener;
         this.enExecucio = false;
     }
 
@@ -30,25 +38,53 @@ public class ScanController {
         this.callback = cb;
     }
 
+    /**
+     * Compatibilitat amb el codi previ: prefix "192.168.1." → escaneja .1-.254.
+     */
     public void escanearRang(String xarxa, PortScanMode mode) {
+        String start = xarxa + "1";
+        String end   = xarxa + "254";
+        escanearRang(start, end, mode);
+    }
+
+    /**
+     * Versió generalitzada: accepta qualsevol rang IPv4 (ex: 10.0.0.5 → 10.0.0.50,
+     * o subxarxes /16 senceres). Usa NetworkUtil.rangIps per validar.
+     */
+    public void escanearRang(String startIp, String endIp, PortScanMode mode) {
+        List<String> ips = NetworkUtil.rangIps(startIp, endIp);
+        if (ips.isEmpty()) {
+            System.err.println(">>> [SCAN] Rang invàlid: " + startIp + " → " + endIp);
+            if (callback != null) callback.onScanFinished(0);
+            return;
+        }
+
         pool = Executors.newFixedThreadPool(NUM_THREADS);
         enExecucio = true;
+        hostsFound.set(0);
 
-        System.out.println(">>> [SCAN] Iniciant escaneig de " + xarxa + "0/24");
+        System.out.println(">>> [SCAN] Iniciant escaneig de " + startIp + " → " + endIp
+                + " (" + ips.size() + " IPs)");
         System.out.println(">>> [SCAN] Mode: " + mode.getDescripcio());
 
-        for (int i = 1; i <= 254; i++) {
+        // Embolicar el listener per comptar hosts trobats sense que la
+        // vista s'hagi de preocupar del recompte.
+        HostFoundListener counting = (ResultatHost h) -> {
+            hostsFound.incrementAndGet();
+            if (hostListener != null) hostListener.onHostFound(h);
+        };
+
+        for (String ip : ips) {
             if (!enExecucio) {
                 System.out.println(">>> [SCAN] Escaneig aturat per l'usuari");
                 break;
             }
-            String ip = xarxa + i;
-            pool.execute(new ScanTask(ip, vista, mode));
+            pool.execute(new ScanTask(ip, counting, mode));
         }
 
         pool.shutdown();
 
-        // FIX: notifiquem quan acaba via thread de monitoring, no bloquejem la UI
+        // Thread de monitoring que notifica el final passant el comptador real.
         new Thread(() -> {
             try {
                 pool.awaitTermination(30, TimeUnit.MINUTES);
@@ -57,11 +93,9 @@ public class ScanController {
             }
             enExecucio = false;
             if (callback != null) {
-                // el callback s'executa des del thread de monitoring,
-                // els components Swing l'han d'usar amb invokeLater
-                callback.onScanFinished(0);
+                callback.onScanFinished(hostsFound.get());
             }
-        }).start();
+        }, "scan-monitor").start();
     }
 
     public void aturar() {
@@ -74,5 +108,9 @@ public class ScanController {
 
     public boolean isEnExecucio() {
         return enExecucio;
+    }
+
+    public int getHostsFound() {
+        return hostsFound.get();
     }
 }

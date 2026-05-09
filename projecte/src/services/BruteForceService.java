@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -14,11 +15,13 @@ public class BruteForceService extends AbstractScanService {
 
     private String rutaUsuaris;
     private String rutaPasswords;
-    private List<String> resultats;
+    // FIX: synchronized list i mètodes principals synchronized per evitar
+    // que dos atacs concurrents s'entrecreuin la llista de resultats.
+    private final List<String> resultats;
 
     public BruteForceService() {
         super("HYDRA");
-        this.resultats = new ArrayList<>();
+        this.resultats = Collections.synchronizedList(new ArrayList<>());
     }
 
     // FIX: ara sí llegim el codi de sortida i tanquem el procés
@@ -51,7 +54,7 @@ public class BruteForceService extends AbstractScanService {
         this.rutaPasswords = pass;
     }
 
-    public void atacar(String ip, int port, String rutaUsers, String rutaPass) {
+    public synchronized void atacar(String ip, int port, String rutaUsers, String rutaPass) {
         if (!fitxerExisteix(rutaUsers)) {
             logError("Diccionari d'usuaris no trobat: " + rutaUsers);
             return;
@@ -119,12 +122,12 @@ public class BruteForceService extends AbstractScanService {
         }
     }
 
-    public List<String> getResultats() {
+    public synchronized List<String> getResultats() {
         return new ArrayList<>(resultats);
     }
 
     // FIX: LocalDateTime en comptes de new java.util.Date() (deprecated des de Java 8)
-    public boolean exportToCSV(File file) {
+    public synchronized boolean exportToCSV(File file) {
         if (resultats.isEmpty()) {
             log("No hi ha resultats per exportar.");
             return false;

@@ -7,32 +7,41 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import javax.swing.SwingUtilities;
 import model.ResultatHost;
 import utils.NetworkUtil;
-import view.MainFrame;
 
+/**
+ * Tasca d'escaneig per a un sol host.
+ *
+ * Notifica el resultat via {@link HostFoundListener} en lloc de tenir una
+ * referència directa a la vista — això permet testejar la classe sense
+ * Swing i compleix la separació MVC.
+ */
 public class ScanTask implements Runnable {
 
-    private String ip;
-    private MainFrame vista;
-    private PortScanMode mode;
+    private final String ip;
+    private final HostFoundListener listener;
+    private final PortScanMode mode;
+
     private static final int PORT_THREADS = 50;
     private static final int PORT_TIMEOUT = 50;
-    // FIX: limitem les tasques en cua per evitar OutOfMemoryError en mode FULL
-    // Sense això, mode FULL encolava 65535 Runnable per host × 20 hosts = ~1.3M objectes en RAM
-    // Assisted by Claude (Anthropic) — semaphore-based backpressure for full port scan
+    // Backpressure: limita la cua d'objectes pendents tant en mode FULL com PARCIAL
     private static final int MAX_QUEUED = 500;
+    private static final int ICMP_TIMEOUT = 200;
+    private static final int TCP_FALLBACK_TIMEOUT = 150;
 
-    public ScanTask(String ip, MainFrame v, PortScanMode mode) {
+    public ScanTask(String ip, HostFoundListener listener, PortScanMode mode) {
         this.ip = ip;
-        this.vista = v;
+        this.listener = listener;
         this.mode = mode;
     }
 
     @Override
     public void run() {
-        if (!NetworkUtil.isReachable(ip, 200)) {
+        // FIX crític: si ICMP falla provem TCP a ports comuns. Sense això,
+        // hosts amb firewall o sense privilegis ICMP es perdien encara que
+        // tinguessin serveis oberts.
+        if (!NetworkUtil.isHostAlive(ip, ICMP_TIMEOUT, TCP_FALLBACK_TIMEOUT)) {
             return;
         }
 
@@ -42,50 +51,55 @@ public class ScanTask implements Runnable {
         List<Integer> portsOberts = Collections.synchronizedList(new ArrayList<>());
 
         ExecutorService portPool = Executors.newFixedThreadPool(PORT_THREADS);
+        // FIX: també apliquem el semàfor en mode parcial per coherència i per
+        // evitar pics de càrrega quan en el futur s'ampliï la llista de ports.
+        Semaphore sem = new Semaphore(MAX_QUEUED);
 
-        if (mode.esParcial()) {
-            // mode parcial: ports comuns — no hi ha risc de memoria
-            int[] ports = mode.getPorts();
-            for (int port : ports) {
-                portPool.execute(() -> {
-                    if (NetworkUtil.isPortOpen(ip, port, PORT_TIMEOUT)) {
-                        portsOberts.add(port);
-                    }
-                });
-            }
-        } else {
-            // FIX mode FULL: usem semàfor per limitar les tasques en cua
-            // Sense això eren 65535 Runnable encolats per host → OOM possible
-            Semaphore sem = new Semaphore(MAX_QUEUED);
-            for (int port = 1; port <= 65535; port++) {
-                final int p = port;
+        try {
+            int[] ports = mode.esParcial() ? mode.getPorts() : null;
+            int total = (ports != null) ? ports.length : 65535;
+
+            for (int idx = 0; idx < total; idx++) {
+                final int p = (ports != null) ? ports[idx] : (idx + 1);
                 try {
-                    sem.acquire(); // bloqueja si la cua és plena
+                    sem.acquire();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;
                 }
                 portPool.execute(() -> {
                     try {
-                        if (NetworkUtil.isPortOpen(ip, p, PORT_TIMEOUT / 2)) {
+                        int timeout = mode.esParcial() ? PORT_TIMEOUT : PORT_TIMEOUT / 2;
+                        if (NetworkUtil.isPortOpen(ip, p, timeout)) {
                             portsOberts.add(p);
                         }
                     } finally {
-                        sem.release(); // allibera espai a la cua
+                        sem.release();
                     }
                 });
             }
-        }
-
-        portPool.shutdown();
-        try {
-            portPool.awaitTermination(10, TimeUnit.MINUTES);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        } finally {
+            portPool.shutdown();
+            try {
+                portPool.awaitTermination(10, TimeUnit.MINUTES);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         host.setPortsOberts(portsOberts);
 
-        SwingUtilities.invokeLater(() -> vista.afegirResultat(host));
+        // Resolució de hostname després d'haver fet l'escaneig de ports —
+        // si falla, ResultatHost simplement queda amb hostname = null.
+        try {
+            String hn = NetworkUtil.resolveHostname(ip);
+            if (hn != null && !hn.equals(ip)) {
+                host.setHostname(hn);
+            }
+        } catch (Exception ignored) {}
+
+        if (listener != null) {
+            listener.onHostFound(host);
+        }
     }
 }

@@ -414,7 +414,7 @@ public class JsonExporter {
 
     /**
      * Escapa caràcters especials per JSON estricte (RFC 8259).
-     * Inclou control chars (< 0x20) com a \uXXXX.
+     * Inclou control chars (menors de 0x20) com a \\uXXXX.
      */
     private static String escapeJson(String s) {
         if (s == null) return "";

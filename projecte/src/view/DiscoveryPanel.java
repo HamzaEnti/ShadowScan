@@ -1,5 +1,6 @@
 package view;
 
+import controller.HostFoundListener;
 import controller.PortScanMode;
 import controller.ScanController;
 import java.awt.*;
@@ -10,9 +11,10 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import model.ResultatHost;
+import model.RiskLevel;
 import utils.JsonExporter;
 
-public class DiscoveryPanel extends BasePanel {
+public class DiscoveryPanel extends BasePanel implements HostFoundListener {
 
     private JTextField txtIpInici;
     private JTextField txtIpFi;
@@ -27,7 +29,6 @@ public class DiscoveryPanel extends BasePanel {
     private JTable taula;
     private DefaultTableModel modelTaula;
 
-    // MILLORA: progress bar i comptador visual
     private JProgressBar progressBar;
     private JLabel lblProgress;
     private int hostsEscanejats = 0;
@@ -42,9 +43,10 @@ public class DiscoveryPanel extends BasePanel {
     @Override
     protected void initComponents() {
         this.resultats = new ArrayList<>();
-        this.controller = new ScanController(parentFrame);
+        // FIX: el controlador ja no rep MainFrame; rep aquest panel com a listener
+        this.controller = new ScanController(this);
 
-        // FIX: callback per saber quan acaba el scan i habilitar el botó export
+        // FIX: callback ara rep el comptador real de hosts trobats
         controller.setCallback(hostsFound -> SwingUtilities.invokeLater(() -> {
             btnExport.setEnabled(true);
             btnExportRedTrace.setEnabled(true);
@@ -52,7 +54,7 @@ public class DiscoveryPanel extends BasePanel {
             btnStop.setEnabled(false);
             progressBar.setIndeterminate(false);
             progressBar.setValue(100);
-            lblProgress.setText("Escaneig finalitzat. " + resultats.size() + " hosts trobats.");
+            lblProgress.setText("Escaneig finalitzat. " + hostsFound + " hosts actius trobats.");
         }));
 
         this.setLayout(new BorderLayout());
@@ -69,7 +71,6 @@ public class DiscoveryPanel extends BasePanel {
     private JPanel crearPanelNord() {
         JPanel pnlNord = new JPanel(new BorderLayout());
 
-        // ── Configuració de xarxa ──
         JPanel pnlConfig = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 6));
         pnlConfig.setBorder(BorderFactory.createTitledBorder("Configuració de Xarxa"));
 
@@ -79,14 +80,12 @@ public class DiscoveryPanel extends BasePanel {
 
         pnlConfig.add(new JLabel("IP Fi:"));
         txtIpFi = crearCampText(12);
-        // MILLORA: txtIpFi ara s'usa per calcular el rang real
         pnlConfig.add(txtIpFi);
 
         btnStart = crearBoto("Escanejar", COLOR_VERD);
         btnStop  = crearBoto("Aturar", COLOR_SALMO);
         btnStop.setEnabled(false);
 
-        // FIX: export deshabilitiat fins que hi hagi dades
         btnExport = crearBoto("Guardar JSON");
         btnExport.setEnabled(false);
 
@@ -99,7 +98,6 @@ public class DiscoveryPanel extends BasePanel {
         pnlConfig.add(btnExport);
         pnlConfig.add(btnExportRedTrace);
 
-        // ── Mode d'escaneig ──
         JPanel pnlMode = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 4));
         pnlMode.setBorder(BorderFactory.createTitledBorder("Mode d'escaneig"));
 
@@ -113,7 +111,6 @@ public class DiscoveryPanel extends BasePanel {
         pnlMode.add(rbPortsComuns);
         pnlMode.add(rbTotsPorts);
 
-        // ── Progress bar ──
         JPanel pnlProgress = new JPanel(new BorderLayout(8, 0));
         pnlProgress.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
         progressBar = new JProgressBar(0, 100);
@@ -134,7 +131,8 @@ public class DiscoveryPanel extends BasePanel {
     private JPanel crearPanelTaula() {
         JPanel pnl = new JPanel(new BorderLayout());
 
-        String[] columnes = {"IP Adreça", "Estat", "Ports Detectats", "Risc"};
+        // MILLORA: nova columna Hostname
+        String[] columnes = {"IP Adreça", "Hostname", "Estat", "Ports Detectats", "Risc"};
         modelTaula = new DefaultTableModel(columnes, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
@@ -145,17 +143,19 @@ public class DiscoveryPanel extends BasePanel {
         taula.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         taula.setGridColor(new Color(230, 230, 230));
 
-        // MILLORA: color per files de risc alt
         taula.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object val,
                     boolean sel, boolean foc, int row, int col) {
                 Component c = super.getTableCellRendererComponent(t, val, sel, foc, row, col);
-                String risc = (String) t.getValueAt(row, 3);
+                String risc = (String) t.getValueAt(row, 4);
                 if (!sel) {
-                    if ("CRÍTIC".equals(risc))  c.setBackground(new Color(255, 230, 230));
-                    else if ("MITJÀ".equals(risc)) c.setBackground(new Color(255, 248, 220));
-                    else c.setBackground(Color.WHITE);
+                    if (RiskLevel.CRITIC.getEtiqueta().equals(risc))
+                        c.setBackground(new Color(255, 230, 230));
+                    else if (RiskLevel.MITJA.getEtiqueta().equals(risc))
+                        c.setBackground(new Color(255, 248, 220));
+                    else
+                        c.setBackground(Color.WHITE);
                 }
                 return c;
             }
@@ -183,36 +183,37 @@ public class DiscoveryPanel extends BasePanel {
 
     private void iniciarEscaneig() {
         String ipInici = txtIpInici.getText().trim();
+        String ipFi    = txtIpFi.getText().trim();
 
-        // FIX: validació d'IP millorada
         if (!ipValida(ipInici)) {
             JOptionPane.showMessageDialog(this,
-                "Introdueix una IP vàlida (ex: 192.168.1.1)",
+                "IP d'inici invàlida (ex: 192.168.1.1)",
+                "IP incorrecta", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        if (!ipValida(ipFi)) {
+            JOptionPane.showMessageDialog(this,
+                "IP de fi invàlida (ex: 192.168.1.254)",
                 "IP incorrecta", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        // FIX: bloquejar export mentre s'escaneja
         btnExport.setEnabled(false);
         btnExportRedTrace.setEnabled(false);
         btnStart.setEnabled(false);
         btnStop.setEnabled(true);
 
-        // MILLORA: feedback visual
         progressBar.setIndeterminate(true);
         hostsEscanejats = 0;
         resultats.clear();
         modelTaula.setRowCount(0);
-        lblProgress.setText("Escanejant xarxa...");
+        lblProgress.setText("Escanejant rang " + ipInici + " → " + ipFi + "...");
 
-        String xarxa = ipInici.substring(0, ipInici.lastIndexOf(".") + 1);
         PortScanMode mode = rbPortsComuns.isSelected() ? PortScanMode.PARCIAL : PortScanMode.FULL;
-
-        System.out.println(">>> [SCAN] Iniciant escombrat a " + xarxa + "0/24...");
-        controller.escanearRang(xarxa, mode);
+        // MILLORA: usem el rang real introduït per l'usuari
+        controller.escanearRang(ipInici, ipFi, mode);
     }
 
-    // FIX: nova exportació per a RedTrace
     private void exportarRedTrace() {
         File fitxer = guardarFitxer("Guardar topologia RedTrace", "topology.json");
         if (fitxer != null) {
@@ -239,16 +240,26 @@ public class DiscoveryPanel extends BasePanel {
         }
     }
 
-    // MILLORA: afegim columna de risc a la taula
+    /**
+     * Implementació de HostFoundListener: el controller crida aquí cada
+     * vegada que un host és trobat. Garantim execució al EDT.
+     */
+    @Override
+    public void onHostFound(ResultatHost host) {
+        SwingUtilities.invokeLater(() -> afegirResultat(host));
+    }
+
     public synchronized void afegirResultat(ResultatHost host) {
         resultats.add(host);
         hostsEscanejats++;
 
-        // Calcul simple de risc per mostrar a la taula
-        String risc = calcularRiscTaula(host);
+        // FIX: la classificació de risc viu al model, no al panel
+        String risc = host.getRiskLevel().getEtiqueta();
+        String hostname = host.getHostname() != null ? host.getHostname() : "—";
 
         modelTaula.addRow(new Object[]{
             host.getIp(),
+            hostname,
             "[" + host.getEstat() + "]",
             host.getPortsOberts().toString(),
             risc
@@ -257,19 +268,6 @@ public class DiscoveryPanel extends BasePanel {
         lblProgress.setText("Hosts trobats: " + hostsEscanejats);
     }
 
-    private String calcularRiscTaula(ResultatHost host) {
-        List<Integer> ports = host.getPortsOberts();
-        if (ports.isEmpty()) return "BAIX";
-        boolean altRisc = ports.contains(23) || ports.contains(445)
-                       || ports.contains(3389) || ports.contains(21);
-        boolean mitjaRisc = ports.contains(22) || ports.contains(3306)
-                         || ports.contains(5432);
-        if (altRisc) return "CRÍTIC";
-        if (mitjaRisc) return "MITJÀ";
-        return "BAIX";
-    }
-
-    // FIX: validació d'IP real amb regex
     private boolean ipValida(String ip) {
         if (ip == null || ip.isEmpty()) return false;
         String regex = "^((25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(25[0-5]|2[0-4]\\d|[01]?\\d\\d?)$";
