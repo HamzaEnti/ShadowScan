@@ -26,7 +26,11 @@ import utils.ProfileStore;
  */
 public class AdvancedPanel extends BasePanel {
 
-    private final ProfileStore profileStore = new ProfileStore();
+    // Atenció: NO inicialitzar amb '= new ProfileStore()' aquí. BasePanel
+    // crida initComponents() des del constructor, abans que els field
+    // initializers de la subclasse s'executin → NullPointerException.
+    // S'instancia dins d'initComponents().
+    private ProfileStore profileStore;
     private RestApi restApi;
     private ScanWorker localWorker;
 
@@ -65,6 +69,8 @@ public class AdvancedPanel extends BasePanel {
 
     @Override
     protected void initComponents() {
+        this.profileStore = new ProfileStore();
+
         setLayout(new BorderLayout());
         JTabbedPane tabs = new JTabbedPane();
 

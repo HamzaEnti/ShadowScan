@@ -24,7 +24,9 @@ public class CvePanel extends BasePanel {
     private DefaultTableModel modelTaula;
     private JLabel lblEstat;
 
-    private final CveService cveService = new CveService();
+    // Lazy-init dins d'initComponents(): BasePanel.<init> crida initComponents
+    // abans que els field initializers de la subclasse s'executin.
+    private CveService cveService;
 
     public CvePanel(MainFrame parent) {
         super(parent);
@@ -32,6 +34,8 @@ public class CvePanel extends BasePanel {
 
     @Override
     protected void initComponents() {
+        this.cveService = new CveService();
+
         setLayout(new BorderLayout());
 
         JPanel pnlNord = new JPanel(new GridBagLayout());
