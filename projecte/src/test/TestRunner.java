@@ -77,6 +77,10 @@ public class TestRunner {
         RiskLevelTest.run();
         JsonUtilTest.run();
         JsonExporterTest.run();
+        JsonParserTest.run();
+        CveServiceTest.run();
+        DashboardTest.run();
+        PdfReportTest.run();
         int failed = summary();
         System.exit(failed == 0 ? 0 : 1);
     }

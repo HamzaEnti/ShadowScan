@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](https://github.com/HamzaEnti/ShadowScan/blob/main/LICENSE)
 [![Status](https://img.shields.io/badge/status-active-success?style=for-the-badge)](https://github.com/HamzaEnti/ShadowScan)
 [![Architecture](https://img.shields.io/badge/architecture-MVC-blue?style=for-the-badge)](https://en.wikipedia.org/wiki/Model%E2%80%93view%E2%80%93controller)
-[![Version](https://img.shields.io/badge/version-1.1.0-purple?style=for-the-badge)](https://github.com/HamzaEnti/ShadowScan/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-purple?style=for-the-badge)](https://github.com/HamzaEnti/ShadowScan/releases)
  
 Plataforma de seguretat informatica amb interficie grafica que unifica multiples eines de pentesting en una sola aplicacio. Desenvolupada per a professionals de ciberseguretat i administradors de sistemes que necessiten realitzar auditories de xarxa de manera eficient i visual.
  
@@ -485,11 +485,11 @@ Durant el desenvolupament de SHADOWSCAN, s'ha utilitzat Intel·ligència Artific
 - [x] Sidebar fosc professional amb estat actiu i hover
 - [x] Consola redissenyada amb tema fosc i botó de netejar
 - [x] Progress bar i comptador de hosts en temps real
-### Versio 1.2
+### Versio 1.2 — *Publicada maig 2026*
  
-- [ ] Dashboard amb estadistiques i grafics
-- [ ] Generacio d'informes en format PDF
-- [ ] Integracio amb bases de dades CVE
+- [x] Dashboard amb estadistiques i grafics (KPIs, pie chart de risc, top ports)
+- [x] Generacio d'informes en format PDF (sense dependencies externes)
+- [x] Integracio amb bases de dades CVE (NVD API + catàleg offline)
 ### Versio 2.0
  
 - [ ] Sistema de perfils d'escaneig
